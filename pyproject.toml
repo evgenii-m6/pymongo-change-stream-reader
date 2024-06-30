@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "pymongo-change-stream-reader"
+version = "0.1.0"
+description = ""
+authors = ["Evgenii M6 <evgenii.optimal@tutamail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+prometheus-client = "^0.20.0"
+pymongo = "^4.7.3"
+confluent-kafka = "^2.4.0"
+pydantic = "^2.7.4"
+
+[tool.poetry.dev-dependencies]
+mypy = "^1.10.1"
+pytest = "^7.4.3"
+pytest-asyncio = "^0.21.1"
+pytest-cov = "^4.1.0"
+pytest-mypy = "^0.10.3"
+ruff = "*"
+
+
+[build-system]
+requires = ["poetry-core>=1.5.1"]
+build-backend = "poetry.core.masonry.api"
