@@ -1,0 +1,11 @@
+def test_import():
+    import pymongo_change_stream_reader.change_stream_reading
+    import pymongo_change_stream_reader.committing
+    import pymongo_change_stream_reader.managing
+    import pymongo_change_stream_reader.producing
+    import pymongo_change_stream_reader.base_worker
+    import pymongo_change_stream_reader.messages
+    import pymongo_change_stream_reader.main
+    import pymongo_change_stream_reader.models
+    import pymongo_change_stream_reader.settings
+    import pymongo_change_stream_reader.utils
