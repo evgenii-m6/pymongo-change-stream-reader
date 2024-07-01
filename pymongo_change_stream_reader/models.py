@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import NamedTuple, Any
 
-from bson import RawBSONDocument
+from bson.raw_bson import RawBSONDocument
 from pydantic import BaseModel
 
 

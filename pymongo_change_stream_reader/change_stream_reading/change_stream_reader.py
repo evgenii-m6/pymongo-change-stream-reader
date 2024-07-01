@@ -5,7 +5,8 @@ from json import dumps
 from multiprocessing import Queue
 from typing import Iterator, Mapping, Any
 
-from bson import RawBSONDocument, decode
+from bson import decode
+from bson.raw_bson import RawBSONDocument
 from pymongo import MongoClient
 from pymongo.change_stream import ChangeStream
 from pymongo.collection import Collection
