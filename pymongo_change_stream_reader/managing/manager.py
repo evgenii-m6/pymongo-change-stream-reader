@@ -1,44 +1,37 @@
 import logging
+import os
+import signal
 import time
-from json import loads, dumps
 from multiprocessing import Queue
 from queue import Empty
 
-from pydantic import BaseModel
+import psutil
 
 from pymongo_change_stream_reader.change_stream_reading import (
     build_change_stream_reader_process
 )
 from pymongo_change_stream_reader.committing import build_commit_process
-from pymongo_change_stream_reader.messages import (
-    deserialize_message,
-    serialize_message,
-    Status,
-    ChangeStatus,
+from pymongo_change_stream_reader.exceptions import (
+    StartTimeoutError,
+    UnexpectedMessageType,
+    UnexpectedStatusReceived,
+    SubprocessStoppedUnexpectedly
 )
+from pymongo_change_stream_reader.messages import (
+    Status,
+    ChangeStatus, decode_message, encode_message,
+)
+from pymongo_change_stream_reader.models import ProcessData, Statuses, ChangeStatuses
 from pymongo_change_stream_reader.producing import build_producer_process
 from pymongo_change_stream_reader.settings import (
     Settings,
     NewTopicConfiguration,
     Pipeline,
 )
-from pymongo_change_stream_reader.utils import TaskIdGenerator, ProcessData, Statuses, \
-    ChangeStatuses
+from pymongo_change_stream_reader.utils import TaskIdGenerator
+
 
 default_logger = logging.Logger(__name__, logging.INFO)
-
-
-class BaseError(Exception):
-    ...
-
-
-class StartTimeoutError(BaseError):
-    ...
-
-
-class StopError(BaseError):
-    def __init__(self, task_id):
-        self.task_id = task_id
 
 
 class Manager:
@@ -49,6 +42,9 @@ class Manager:
         new_topic_configuration: NewTopicConfiguration,
         logger: logging.Logger = default_logger,
     ):
+        self._pid = os.getpid()
+        self._current_process = psutil.Process(self._pid)
+        self._manager_create_time = self._current_process.create_time()
         self._settings = settings
         self._pipeline = pipeline
         self._new_topic_configuration = new_topic_configuration
@@ -70,9 +66,15 @@ class Manager:
         self._change_log_reader_task_id: int = self._build_change_log_reader()
         self._committer_task_id: int = self._build_committer()
 
-        self._program_started_at = time.monotonic()
         self._program_start_timeout = self._settings.program_start_timeout
+        self._program_started_at = time.monotonic()
 
+        self._should_run = False
+
+        signal.signal(signal.SIGINT, self._exit_gracefully)
+        signal.signal(signal.SIGTERM, self._exit_gracefully)
+
+    def _exit_gracefully(self, signum, frame):
         self._should_run = False
 
     def _all_queues(self) -> list[Queue]:
@@ -87,6 +89,8 @@ class Manager:
         for i in range(self._settings.producers_count):
             request_queue = Queue(maxsize=1000)
             process_data = build_producer_process(
+                manager_pid=self._pid,
+                manager_create_time=self._manager_create_time,
                 task_id_generator=self._task_id_generator,
                 producer_queue=self._producer_queues[i],
                 request_queue=request_queue,
@@ -103,6 +107,8 @@ class Manager:
     def _build_change_log_reader(self) -> int:
         request_queue = Queue(maxsize=1000)
         process_data = build_change_stream_reader_process(
+            manager_pid=self._pid,
+            manager_create_time=self._manager_create_time,
             task_id_generator=self._task_id_generator,
             producer_queues=self._producer_queues,
             request_queue=request_queue,
@@ -118,6 +124,8 @@ class Manager:
     def _build_committer(self) -> int:
         request_queue = Queue(maxsize=1000)
         process_data = build_commit_process(
+            manager_pid=self._pid,
+            manager_create_time=self._manager_create_time,
             task_id_generator=self._task_id_generator,
             request_queue=request_queue,
             response_queue=self._response_queue,
@@ -128,75 +136,86 @@ class Manager:
         self._processes[process_data.task_id] = process_data
         return process_data.task_id
 
-    def start(self):
+    def _run(self):
+        self._logger.info(f"Manager started")
         self._program_started_at = time.monotonic()
         self._should_run = True
 
         for process_data in self._processes.values():
             process_data.process.start()
 
+        self._logger.info(f"Subprocesses initialized")
+
+        self._wait_for_subprocess_status(Statuses.starting)
+
+        self._send_command_change_statuses(ChangeStatuses.started)
+
+        self._wait_for_subprocess_status(Statuses.started)
+
+        self._send_command_change_statuses(ChangeStatuses.running)
+
+        self._run_monitoring()
+
+    def run(self):
+        try:
+            self._run()
+        except BaseException as ex:
+            self._logger.error(
+                f"Error in {self.worker_name}: {ex}",
+                stack_info=True
+            )
+        finally:
+            try:
+                self.stop()
+            except BaseException as err:
+                self._logger.error(
+                    f"Error when EXIT in {self.worker_name}: {err}",
+                    stack_info=True
+                )
+                raise err
+
+    def _wait_for_subprocess_status(self, status: Statuses):
         expected_responses_from_tasks = set()
         expected_responses_from_tasks.update(self._producers_task_id)
         expected_responses_from_tasks.add(self._change_log_reader_task_id)
         expected_responses_from_tasks.add(self._committer_task_id)
 
-        try:
-            while expected_responses_from_tasks and self._should_run:
-                if self._is_start_timeout():
-                    raise StartTimeoutError()
-                try:
-                    result = self._response_queue.get(
-                        timeout=self._settings.queue_get_timeout
+        while expected_responses_from_tasks and self._should_run:
+            if self._is_start_timeout():
+                raise StartTimeoutError()
+            try:
+                message_bytes = self._response_queue.get(
+                    timeout=self._settings.queue_get_timeout
+                )
+            except Empty:
+                continue
+            if message_bytes:
+                received_status = self._get_status(message_bytes)
+                if received_status != status:
+                    raise UnexpectedStatusReceived(
+                        received=received_status, expected=status
                     )
-                except Empty:
-                    continue
-                if result:
-                    message = self._decode_message(result)
-                    if isinstance(message, Status):
-                        if message.status in (Statuses.started, Statuses.running):
-                            expected_responses_from_tasks.discard(message.task_id)
-                        elif message.status == Statuses.stopped:
-                            raise StopError(message.task_id)
-        except BaseException as ex:
-            self._logger.error(
-                f"Error when start in {self.worker_name}: {ex}",
-                stack_info=True
-            )
-            self.stop()
-        else:
-            self.run()
 
-    def run(self):
-        for task_id, request_queue in self._request_queues.items():
-            new_status = ChangeStatus(task_id=task_id, status=ChangeStatuses.running)
-            request_queue.put(self._encode_message(new_status))
+    def _get_status(self, data: bytes) -> Statuses:
+        message = decode_message(data)
 
-        self.run_monitoring()
+        if not isinstance(message, Status):
+            raise UnexpectedMessageType(message_type=ChangeStatus, received=message)
 
-    def run_monitoring(self):
-        try:
-            while self._should_run:
-                try:
-                    result = self._response_queue.get(
-                        timeout=self._settings.queue_get_timeout
-                    )
-                except Empty:
-                    continue
-                if result:
-                    message = self._decode_message(result)
-                    if isinstance(message, Status) and message.status == Statuses.stopped:
-                        raise StopError(message.task_id)
+        return message.status
 
-                for task_id, process_data in self._processes.items():
-                    process = process_data.process
-                    if not process.is_alive():
-                        raise StopError(task_id)
-        except BaseException as ex:
-            self._logger.error(
-                f"Error when run in {self.worker_name}: {ex}",
-                stack_info=True
-            )
-        self.stop()
+    def _send_command_change_statuses(self, status: ChangeStatuses):
+        for task_id, queue in self._request_queues.items():
+            message = ChangeStatus(task_id=task_id, status=status)
+            message_bytes = encode_message(message)
+            queue.put(message_bytes)
+
+    def _run_monitoring(self):
+        while self._should_run:
+            for task_id, process_data in self._processes.items():
+                process = process_data.process
+                if not process.is_alive():
+                    raise SubprocessStoppedUnexpectedly(task_id)
 
     def stop(self):
         self._should_run = False
@@ -204,8 +223,20 @@ class Manager:
         for task_id, process_data in self._processes.items():
             process_data.process.terminate()
 
+        stop_started = time.monotonic()
         for task_id, process_data in self._processes.items():
-            process_data.process.join()
+            process_data.process.join(
+                timeout=self._settings.program_graceful_stop_timeout
+            )
+        left_timeout = self._settings.program_graceful_stop_timeout - (
+                time.monotonic() - stop_started
+        )
+        if left_timeout <= 0:
+            for task_id, process_data in self._processes.items():
+                process_data.process.kill()
+
+        for task_id, process_data in self._processes.items():
+            process_data.process.close()
 
         for queue in self._all_queues():
             while True:
@@ -218,19 +249,8 @@ class Manager:
     def worker_name(self):
         return f"{type(self).__name__}"
 
-    @staticmethod
-    def _encode_message(message: BaseModel):
-        message_bytes = dumps(serialize_message(message)).encode()
-        return message_bytes
-
-    @staticmethod
-    def _decode_message(message: bytes):
-        message = deserialize_message(loads(message.decode()))
-        return message
-
     def _is_start_timeout(self) -> bool:
-        should_not_run = (
+        return (
             time.monotonic() - self._program_started_at >
             self._program_start_timeout
         )
-        return should_not_run
