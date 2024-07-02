@@ -3,10 +3,13 @@ from multiprocessing import Process
 
 from .change_stream_reader import ChangeStreamReader
 from pymongo_change_stream_reader.settings import Settings
-from pymongo_change_stream_reader.utils import TaskIdGenerator, ProcessData
+from pymongo_change_stream_reader.utils import TaskIdGenerator
+from pymongo_change_stream_reader.models import ProcessData
 
 
 def build_change_stream_reader_process(
+    manager_pid: int,
+    manager_create_time: float,
     task_id_generator: TaskIdGenerator,
     producer_queues: dict[int, Queue],
     request_queue: Queue,
@@ -17,6 +20,8 @@ def build_change_stream_reader_process(
 ) -> ProcessData:
     task_id = task_id_generator.get()
     kwargs = {
+        'manager_pid': manager_pid,
+        'manager_create_time': manager_create_time,
         'task_id': task_id,
         'producer_queues': producer_queues,
         'request_queue': request_queue,
@@ -35,7 +40,6 @@ def build_change_stream_reader_process(
         'reader_batch_size': settings.reader_batch_size,
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
-        'program_start_timeout': settings.program_start_timeout,
     }
     process = Process(target=run_change_stream_reader, kwargs=kwargs)
     return ProcessData(task_id=task_id, process=process, kwargs=kwargs)
@@ -43,5 +47,4 @@ def build_change_stream_reader_process(
 
 def run_change_stream_reader(**kwargs):
     worker = ChangeStreamReader(**kwargs)
-    worker.start()
-    worker.run_task()
+    worker.run()

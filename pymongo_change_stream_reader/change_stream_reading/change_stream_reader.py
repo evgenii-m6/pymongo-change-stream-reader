@@ -19,7 +19,7 @@ from pymongo_change_stream_reader.settings import (
     FullDocumentBeforeChange,
     FullDocument,
 )
-from pymongo_change_stream_reader.utils import Statuses
+from pymongo_change_stream_reader.models import Statuses
 from pymongo_change_stream_reader.models import ChangeEvent
 
 

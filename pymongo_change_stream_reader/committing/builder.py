@@ -3,10 +3,13 @@ from multiprocessing import Process
 
 from .committer import CommitFlow
 from pymongo_change_stream_reader.settings import Settings
-from pymongo_change_stream_reader.utils import TaskIdGenerator, ProcessData
+from pymongo_change_stream_reader.utils import TaskIdGenerator
+from pymongo_change_stream_reader.models import ProcessData
 
 
 def build_commit_process(
+    manager_pid: int,
+    manager_create_time: float,
     task_id_generator: TaskIdGenerator,
     request_queue: Queue,
     response_queue: Queue,
@@ -15,6 +18,8 @@ def build_commit_process(
 ) -> ProcessData:
     task_id = task_id_generator.get()
     kwargs = {
+        'manager_pid': manager_pid,
+        'manager_create_time': manager_create_time,
         'task_id': task_id,
         'request_queue': request_queue,
         'response_queue': response_queue,
@@ -27,7 +32,6 @@ def build_commit_process(
         'max_uncommitted_events': settings.max_uncommitted_events,
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
-        'program_start_timeout': settings.program_start_timeout,
     }
     process = Process(target=run_commit_flow, kwargs=kwargs)
     return ProcessData(task_id=task_id, process=process, kwargs=kwargs)
@@ -35,5 +39,4 @@ def build_commit_process(
 
 def run_commit_flow(**kwargs):
     worker = CommitFlow(**kwargs)
-    worker.start()
-    worker.run_task()
+    worker.run()

@@ -1,10 +1,7 @@
 import functools
 import threading
-from enum import Enum
-from multiprocessing import Process
-from typing import NamedTuple
 
-from pydantic import BaseModel
+from .models import Message
 
 
 def check_command_format(func):
@@ -13,22 +10,6 @@ def check_command_format(func):
         message = Message.parse_obj(command)
         return func(message.dict())
     return wrapper
-
-
-class Message(BaseModel):
-    type: str
-    payload: dict
-
-
-class Statuses(str, Enum):
-    running = "running"
-    started = "started"
-    stopped = "stopped"
-
-
-class ChangeStatuses(str, Enum):
-    running = "running"
-    stopped = "stopped"
 
 
 class TaskIdGenerator:
@@ -44,9 +25,3 @@ class TaskIdGenerator:
         finally:
             cls._lock.release()
         return counter
-
-
-class ProcessData(NamedTuple):
-    task_id: int
-    process: Process
-    kwargs: dict

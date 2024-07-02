@@ -12,9 +12,8 @@ from confluent_kafka.admin import AdminClient, NewTopic, TopicMetadata
 
 from pymongo_change_stream_reader.base_worker import BaseWorker
 from pymongo_change_stream_reader.messages import Status, serialize_message
-from pymongo_change_stream_reader.models import DecodedChangeEvent
+from pymongo_change_stream_reader.models import DecodedChangeEvent, Statuses
 from pymongo_change_stream_reader.settings import NewTopicConfiguration
-from pymongo_change_stream_reader.utils import Statuses
 
 default_logger = logging.Logger(__name__, logging.INFO)
 

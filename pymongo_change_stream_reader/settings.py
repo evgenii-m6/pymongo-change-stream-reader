@@ -54,6 +54,7 @@ class Settings(BaseModel):
     queue_put_timeout: int = 10
     queue_get_timeout: int = 1
     program_start_timeout: int = 60
+    program_graceful_stop_timeout: int = 20
     commit_interval: int = 30
     max_uncommitted_events: int = 10000
     new_topic_num_partitions: int = 1
