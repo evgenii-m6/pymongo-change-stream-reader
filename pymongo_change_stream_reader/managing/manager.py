@@ -12,7 +12,7 @@ from pymongo_change_stream_reader.change_stream_reading import (
 )
 from pymongo_change_stream_reader.committing import build_commit_process
 from pymongo_change_stream_reader.exceptions import (
-    StartTimeoutError,
+    WaitTimeoutError,
     UnexpectedMessageType,
     UnexpectedStatusReceived,
     SubprocessStoppedUnexpectedly
@@ -67,7 +67,6 @@ class Manager:
         self._committer_task_id: int = self._build_committer()
 
         self._program_start_timeout = self._settings.program_start_timeout
-        self._program_started_at = time.monotonic()
 
         self._should_run = False
 
@@ -138,7 +137,6 @@ class Manager:
 
     def _run(self):
         self._logger.info(f"Manager started")
-        self._program_started_at = time.monotonic()
         self._should_run = True
 
         for process_data in self._processes.values():
@@ -146,13 +144,24 @@ class Manager:
 
         self._logger.info(f"Subprocesses initialized")
 
-        self._wait_for_subprocess_status(Statuses.starting)
+        self._wait_for_subprocess_status(
+            status=Statuses.starting,
+            timeout=self._settings.program_start_timeout
+        )
 
         self._send_command_change_statuses(ChangeStatuses.started)
 
-        self._wait_for_subprocess_status(Statuses.started)
+        self._wait_for_subprocess_status(
+            status=Statuses.started,
+            timeout=self._settings.program_start_timeout
+        )
 
         self._send_command_change_statuses(ChangeStatuses.running)
+
+        self._wait_for_subprocess_status(
+            status=Statuses.running,
+            timeout=self._settings.program_start_timeout
+        )
 
         self._run_monitoring()
 
@@ -174,15 +183,16 @@ class Manager:
                 )
                 raise err
 
-    def _wait_for_subprocess_status(self, status: Statuses):
+    def _wait_for_subprocess_status(self, status: Statuses, timeout: float):
         expected_responses_from_tasks = set()
         expected_responses_from_tasks.update(self._producers_task_id)
         expected_responses_from_tasks.add(self._change_log_reader_task_id)
         expected_responses_from_tasks.add(self._committer_task_id)
 
+        start_time = time.monotonic()
         while expected_responses_from_tasks and self._should_run:
-            if self._is_start_timeout():
-                raise StartTimeoutError()
+            if time.monotonic() - start_time > timeout:
+                raise WaitTimeoutError()
             try:
                 message_bytes = self._response_queue.get(
                     timeout=self._settings.queue_get_timeout
@@ -248,9 +258,3 @@ class Manager:
     @property
     def worker_name(self):
         return f"{type(self).__name__}"
-
-    def _is_start_timeout(self) -> bool:
-        return (
-            time.monotonic() - self._program_started_at >
-            self._program_start_timeout
-        )
