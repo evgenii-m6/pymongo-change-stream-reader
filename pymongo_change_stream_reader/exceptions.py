@@ -11,7 +11,7 @@ class BaseApplicationError(Exception):
         repr(self)
 
 
-class StartTimeoutError(BaseApplicationError):
+class WaitTimeoutError(BaseApplicationError):
     ...
 
 

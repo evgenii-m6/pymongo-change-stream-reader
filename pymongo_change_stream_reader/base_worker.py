@@ -108,7 +108,9 @@ class BaseWorker(ABC):
         self._send_status(status=Statuses.starting)
         self._wait_for_change_status_command(ChangeStatuses.started)
         self.start()
+        self._send_status(status=Statuses.started)
         self._wait_for_change_status_command(ChangeStatuses.running)
+        self._send_status(status=Statuses.running)
         self.task()
 
     def run(self):
