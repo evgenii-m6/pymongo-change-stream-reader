@@ -21,6 +21,8 @@ default_logger = logging.Logger(__name__, logging.INFO)
 
 
 class CommitFlow(BaseWorker):
+    _token_mongo_client_cls = MongoClient
+
     def __init__(
         self,
         manager_pid: int,
@@ -51,7 +53,7 @@ class CommitFlow(BaseWorker):
             stream_reader_name=stream_reader_name
         )
         self._committer_queue = committer_queue
-        self._token_mongo_client = MongoClient(host=token_mongo_uri)
+        self._token_mongo_client = self._token_mongo_client_cls(host=token_mongo_uri)
         self._token_database = token_database
         self._token_collection = token_collection
 

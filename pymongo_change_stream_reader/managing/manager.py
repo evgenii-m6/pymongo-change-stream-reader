@@ -97,6 +97,7 @@ class Manager:
                 committer_queue=self._commit_queue,
                 new_topic_configuration=self._new_topic_configuration,
                 settings=self._settings,
+                kafka_producer_config=self._settings.kafka_producer_config_dict,
             )
             self._request_queues[process_data.task_id] = request_queue
             self._processes[process_data.task_id] = process_data

@@ -17,6 +17,7 @@ def build_producer_process(
     committer_queue: Queue,
     new_topic_configuration: NewTopicConfiguration,
     settings: Settings,
+    kafka_producer_config: dict,
 ) -> ProcessData:
     task_id = task_id_generator.get()
     kwargs = {
@@ -31,6 +32,7 @@ def build_producer_process(
         'kafka_bootstrap_servers': settings.kafka_bootstrap_servers,
         'new_topic_configuration': new_topic_configuration.dict(),
         'kafka_prefix': settings.kafka_prefix,
+        'kafka_producer_config': kafka_producer_config,
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
     }

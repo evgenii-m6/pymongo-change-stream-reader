@@ -28,6 +28,8 @@ default_logger = logging.Logger(__name__, logging.INFO)
 
 class ChangeStreamReader(BaseWorker):
     _allowed_operation_types = {"insert", "replace", "update", "delete"}
+    _mongo_client_cls = MongoClient
+    _token_mongo_client_cls = MongoClient
 
     def __init__(
         self,
@@ -70,14 +72,14 @@ class ChangeStreamReader(BaseWorker):
         self._number_of_producers = len(self._producer_queues)
 
         self._committer_queue = committer_queue
-        self._mongo_client = MongoClient(
+        self._mongo_client = self._mongo_client_cls(
             host=mongo_uri,
             document_class=RawBSONDocument
         )
         self._token_mongo_uri = token_mongo_uri
         self._token_database = token_database
         self._token_collection = token_collection
-        self._token_mongo_client = MongoClient(
+        self._token_mongo_client = self._token_mongo_client_cls(
             host=self._token_mongo_uri,
         )
         self._watcher = self._get_watcher(database, collection)
