@@ -79,7 +79,6 @@ class ChangeStreamReader(BaseWorker):
         self._token_collection = token_collection
         self._token_mongo_client = MongoClient(
             host=self._token_mongo_uri,
-            document_class=RawBSONDocument
         )
         self._watcher = self._get_watcher(database, collection)
 
@@ -130,7 +129,7 @@ class ChangeStreamReader(BaseWorker):
         self._logger.info(
             f"Request last token for stream_reader_name={self._stream_reader_name}"
         )
-        received_saved_token: SavedToken | None = token_collection.find_one(filter={
+        received_saved_token: dict | None = token_collection.find_one(filter={
             "stream_reader_name": self._stream_reader_name
         })
         self._logger.debug(
@@ -141,9 +140,8 @@ class ChangeStreamReader(BaseWorker):
         self._logger.info(f"Close connection to mongo token server")
         self._token_mongo_client.close()
 
-        saved_token = SavedToken.parse_obj(received_saved_token)
-
         if received_saved_token:
+            saved_token = SavedToken.parse_obj(received_saved_token)
             self._last_resume_token = saved_token.token
             self._logger.info(
                 f"Got last token {self._last_resume_token} "
