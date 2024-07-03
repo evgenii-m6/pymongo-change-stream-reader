@@ -28,9 +28,13 @@ default_logger = logging.Logger(__name__, logging.INFO)
 
 class ChangeStreamReader(BaseWorker):
     _allowed_operation_types = {"insert", "replace", "update", "delete"}
+    _mongo_client_cls = MongoClient
+    _token_mongo_client_cls = MongoClient
 
     def __init__(
         self,
+        manager_pid: int,
+        manager_create_time: float,
         task_id: int,
         producer_queues: dict[int, Queue],
         request_queue: Queue,
@@ -52,32 +56,31 @@ class ChangeStreamReader(BaseWorker):
         reader_batch_size: int | None = None,
         queue_get_timeout: int = 1,
         queue_put_timeout: int = 10,
-        program_start_timeout: int = 60,
     ):
         super().__init__(
+            manager_pid=manager_pid,
+            manager_create_time=manager_create_time,
             task_id=task_id,
             request_queue=request_queue,
             response_queue=response_queue,
             logger=logger,
             queue_put_timeout=queue_put_timeout,
             queue_get_timeout=queue_get_timeout,
-            program_start_timeout=program_start_timeout,
             stream_reader_name=stream_reader_name
         )
         self._producer_queues = producer_queues
         self._number_of_producers = len(self._producer_queues)
 
         self._committer_queue = committer_queue
-        self._mongo_client = MongoClient(
+        self._mongo_client = self._mongo_client_cls(
             host=mongo_uri,
             document_class=RawBSONDocument
         )
         self._token_mongo_uri = token_mongo_uri
         self._token_database = token_database
         self._token_collection = token_collection
-        self._token_mongo_client = MongoClient(
+        self._token_mongo_client = self._token_mongo_client_cls(
             host=self._token_mongo_uri,
-            document_class=RawBSONDocument
         )
         self._watcher = self._get_watcher(database, collection)
 
@@ -128,7 +131,7 @@ class ChangeStreamReader(BaseWorker):
         self._logger.info(
             f"Request last token for stream_reader_name={self._stream_reader_name}"
         )
-        received_saved_token: SavedToken | None = token_collection.find_one(filter={
+        received_saved_token: dict | None = token_collection.find_one(filter={
             "stream_reader_name": self._stream_reader_name
         })
         self._logger.debug(
@@ -139,9 +142,8 @@ class ChangeStreamReader(BaseWorker):
         self._logger.info(f"Close connection to mongo token server")
         self._token_mongo_client.close()
 
-        saved_token = SavedToken.parse_obj(received_saved_token)
-
         if received_saved_token:
+            saved_token = SavedToken.parse_obj(received_saved_token)
             self._last_resume_token = saved_token.token
             self._logger.info(
                 f"Got last token {self._last_resume_token} "

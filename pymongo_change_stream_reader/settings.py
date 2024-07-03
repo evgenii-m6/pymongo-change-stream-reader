@@ -61,6 +61,7 @@ class Settings(BaseModel):
     new_topic_replication_factor: int = 1
     new_topic_config: str | None = None
     kafka_prefix: str = ""
+    kafka_producer_config: str | None = None
 
     @property
     def cursor_pipeline(self) -> Pipeline:
@@ -73,6 +74,13 @@ class Settings(BaseModel):
     def new_topic_config_dict(self) -> dict[str, str]:
         if self.new_topic_config is not None:
             return json.loads(self.new_topic_config)
+        else:
+            return {}
+
+    @property
+    def kafka_producer_config_dict(self) -> dict[str, str]:
+        if self.kafka_producer_config is not None:
+            return json.loads(self.kafka_producer_config)
         else:
             return {}
 

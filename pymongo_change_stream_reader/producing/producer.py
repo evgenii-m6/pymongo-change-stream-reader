@@ -25,9 +25,13 @@ class ProducerFlow(BaseWorker):
         'insert': 'c',
         'delete': 'd'
     }
+    _producer_cls = Producer
+    _admin_kafka_cls = AdminClient
 
     def __init__(
         self,
+        manager_pid: int,
+        manager_create_time: float,
         task_id: int,
         producer_queue: Queue,
         request_queue: Queue,
@@ -36,20 +40,21 @@ class ProducerFlow(BaseWorker):
         stream_reader_name: str,
         kafka_bootstrap_servers: str,
         new_topic_configuration: NewTopicConfiguration,
+        kafka_producer_config: dict[str, str],
         kafka_prefix: str = "",
         logger: logging.Logger = default_logger,
         queue_get_timeout: int = 1,
         queue_put_timeout: int = 10,
-        program_start_timeout: int = 60,
     ):
         super().__init__(
+            manager_pid=manager_pid,
+            manager_create_time=manager_create_time,
             task_id=task_id,
             request_queue=request_queue,
             response_queue=response_queue,
             logger=logger,
             queue_get_timeout=queue_get_timeout,
             queue_put_timeout=queue_put_timeout,
-            program_start_timeout=program_start_timeout,
             stream_reader_name=stream_reader_name,
         )
 
@@ -63,8 +68,12 @@ class ProducerFlow(BaseWorker):
             'bootstrap.servers': kafka_bootstrap_servers,  # Kafka broker address
             'client.id': f"producer_{self._stream_reader_name}_{task_id}"
         }
-        self._kafka_client = Producer(self._config)
-        self._admin_kafka = AdminClient({'bootstrap.servers': kafka_bootstrap_servers})
+        self._config.update(kafka_producer_config)
+
+        self._kafka_client = self._producer_cls(self._config)
+        self._admin_kafka = self._admin_kafka_cls(
+            {'bootstrap.servers': kafka_bootstrap_servers}
+        )
         self._new_topic_configuration = new_topic_configuration
 
         self._should_run = False
