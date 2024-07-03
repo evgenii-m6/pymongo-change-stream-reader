@@ -28,6 +28,8 @@ class ProducerFlow(BaseWorker):
 
     def __init__(
         self,
+        manager_pid: int,
+        manager_create_time: float,
         task_id: int,
         producer_queue: Queue,
         request_queue: Queue,
@@ -40,16 +42,16 @@ class ProducerFlow(BaseWorker):
         logger: logging.Logger = default_logger,
         queue_get_timeout: int = 1,
         queue_put_timeout: int = 10,
-        program_start_timeout: int = 60,
     ):
         super().__init__(
+            manager_pid=manager_pid,
+            manager_create_time=manager_create_time,
             task_id=task_id,
             request_queue=request_queue,
             response_queue=response_queue,
             logger=logger,
             queue_get_timeout=queue_get_timeout,
             queue_put_timeout=queue_put_timeout,
-            program_start_timeout=program_start_timeout,
             stream_reader_name=stream_reader_name,
         )
 

@@ -23,6 +23,8 @@ default_logger = logging.Logger(__name__, logging.INFO)
 class CommitFlow(BaseWorker):
     def __init__(
         self,
+        manager_pid: int,
+        manager_create_time: float,
         task_id: int,
         request_queue: Queue,
         response_queue: Queue,
@@ -36,16 +38,16 @@ class CommitFlow(BaseWorker):
         max_uncommitted_events: int = 10000,
         queue_get_timeout: int = 10,
         queue_put_timeout: int = 10,
-        program_start_timeout: int = 60,
     ):
         super().__init__(
+            manager_pid=manager_pid,
+            manager_create_time=manager_create_time,
             task_id=task_id,
             request_queue=request_queue,
             response_queue=response_queue,
             logger=logger,
             queue_get_timeout=queue_get_timeout,
             queue_put_timeout=queue_put_timeout,
-            program_start_timeout=program_start_timeout,
             stream_reader_name=stream_reader_name
         )
         self._committer_queue = committer_queue
