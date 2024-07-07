@@ -14,8 +14,11 @@ class ProcessCommitEvent:
         self._max_uncommitted_events = max_uncommitted_events
         self._commit_interval = commit_interval
 
-    def process_recheck_event(self, event: RecheckCommitEvent):
-        raise NotImplementedError
+    def process_recheck_event(
+        self,
+        event: RecheckCommitEvent
+    ) -> Iterator[CommittableEvents]:
+        yield from self.process_events_chain()
 
     def process_event(self, event: CommitEvent) -> Iterator[CommittableEvents]:
         if event.need_confirm:
@@ -31,7 +34,10 @@ class ProcessCommitEvent:
         event: CommitEvent
     ) -> Iterator[CommittableEvents]:
         self._update_confirmed_events(event)
-        commit_events = self._get_committable_events(event.count)
+        yield from self.process_events_chain()
+
+    def process_events_chain(self) -> Iterator[CommittableEvents]:
+        commit_events = self._get_committable_events()
         if self._is_need_commit_events(commit_events):
             yield commit_events  # type: ignore
             self._clear_previous_commit_events(commit_events)
@@ -67,13 +73,17 @@ class ProcessCommitEvent:
         elif unconfirmed_token and confirmed_token:
             return confirmed_token
 
-    def _get_committable_events(self, count: int) -> CommittableEvents | None:
+    def _get_committable_events(self) -> CommittableEvents | None:
         confirmed_numbers_with_tokens: list[int] = []
-        for i in range(self._last_sent_commit_event+1, count):
-            event: CommitEvent
-            if event := self._confirmed_events.get(i):
+        commit_event_count = self._last_sent_commit_event + 1
+        while True:
+            if commit_event_count in self._confirmed_events:
+                event = self._confirmed_events[commit_event_count]
                 if event.resume_token:
                     confirmed_numbers_with_tokens.append(event.count)
+                commit_event_count += 1
+            else:
+                break
 
         if confirmed_numbers_with_tokens:
             last_number = confirmed_numbers_with_tokens[-1]
@@ -86,12 +96,12 @@ class ProcessCommitEvent:
             return None
 
     def _is_need_commit_events(self, events: CommittableEvents | None) -> bool:
+        if events is None:
+            return False
         if time.monotonic() - self._last_commit_time > self._commit_interval:
             return True
         if len(events.numbers) > self._max_uncommitted_events:
             return True
-        if events is None:
-            return False
         return False
 
     def _clear_previous_commit_events(self, events: CommittableEvents) -> None:
