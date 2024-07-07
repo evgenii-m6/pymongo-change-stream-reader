@@ -19,6 +19,10 @@ class CommitEvent(NamedTuple):
     resume_token: bytes | None
 
 
+class RecheckCommitEvent:
+    ...
+
+
 class CommittableEvents(NamedTuple):
     numbers: list[int]
     resume_token: bytes
@@ -44,6 +48,7 @@ class Statuses(str, Enum):
     starting = "started"
     started = "started"
     running = "running"
+    stopped = "stopped"
 
 
 class ChangeStatuses(str, Enum):

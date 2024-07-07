@@ -15,6 +15,10 @@ class WaitTimeoutError(BaseApplicationError):
     ...
 
 
+class CounterMaxValueExceedError(BaseApplicationError):
+    ...
+
+
 class IncorrectManagerProcess(BaseApplicationError):
     def __init__(self, pid: int, create_time: float, process: psutil.Process):
         self.pid = pid

@@ -1,10 +1,11 @@
 import logging
 import signal
-from abc import ABC, abstractmethod
+from abc import ABC
 from multiprocessing import Queue
 
 import psutil
 
+from .base_application import BaseApplication
 from .exceptions import IncorrectManagerProcess, IncorrectReceiver, \
     UnexpectedMessageType, UnexpectedStatusChangeReceived, StopSubprocess
 from .messages import (
@@ -15,6 +16,8 @@ from .messages import (
 )
 from .models import Statuses, ChangeStatuses
 
+default_logger = logging.Logger(__name__, logging.INFO)
+
 
 class BaseWorker(ABC):
     def __init__(
@@ -22,28 +25,28 @@ class BaseWorker(ABC):
         manager_pid: int,
         manager_create_time: float,
         task_id: int,
-        stream_reader_name: str,
         request_queue: Queue,
         response_queue: Queue,
-        logger: logging.Logger,
-        queue_get_timeout: int,
-        queue_put_timeout: int,
+        application: BaseApplication,
+        logger: logging.Logger = default_logger,
+        queue_get_timeout: int = 1,
+        queue_put_timeout: int = 10,
     ):
         self._manager_pid = manager_pid
         self._manager_create_time = manager_create_time
         self._manager_process = psutil.Process(self._manager_pid)
         self._task_id = task_id
-        self._stream_reader_name = stream_reader_name
         self._request_queue = request_queue
         self._response_queue = response_queue
         self._queue_put_timeout: int = queue_put_timeout
         self._queue_get_timeout: int = queue_get_timeout
         self._logger = logger
+        self._application = application
 
         self._should_run = False
 
-        signal.signal(signal.SIGINT, self._exit_gracefully)
-        signal.signal(signal.SIGTERM, self._exit_gracefully)
+        signal.signal(signal.SIGINT, self._handle_interruption_signal)
+        signal.signal(signal.SIGTERM, self._handle_interruption_signal)
 
     def _validate_manager(self) -> None:
         ident1 = (self._manager_pid, self._manager_create_time)
@@ -55,35 +58,27 @@ class BaseWorker(ABC):
                 process=self._manager_process
             )
 
-    def _exit_gracefully(self, signum, frame):
+    def _handle_interruption_signal(self, signum, frame):
         self._should_run = False
-
-    @abstractmethod
-    def _start(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    def _stop(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    def _task(self):
-        raise NotImplementedError
+        self._application.exit_gracefully(signum, frame)
 
     @property
     def worker_name(self):
         return f"{type(self).__name__}(task_id={self._task_id})"
 
-    def start(self):
+    def _start(self):
         self._logger.info(f"Start {self.worker_name}")
-        self._start()
+        self._application.start()
         self._logger.info(f"{self.worker_name} started")
 
-    def stop(self):
+    def _stop(self):
         self._logger.info(f"Stop {self.worker_name}")
         self._should_run = False
-        self._stop()
+        self._application.stop()
         self._logger.info(f"{self.worker_name} stopped")
+
+    def _task(self):
+        self._application.task()
 
     def _send_status(self, status: Statuses):
         message = Status(task_id=self._task_id, status=status)
@@ -107,15 +102,16 @@ class BaseWorker(ABC):
         self._validate_manager()
         self._send_status(status=Statuses.starting)
         self._wait_for_change_status_command(ChangeStatuses.started)
-        self.start()
+        self._start()
         self._send_status(status=Statuses.started)
         self._wait_for_change_status_command(ChangeStatuses.running)
         self._send_status(status=Statuses.running)
-        self.task()
+        self._task()
 
     def run(self):
         try:
             self._run()
+            self._logger.warning(f"Normal exit from {self.worker_name}")
         except BaseException as ex:
             self._logger.error(
                 f"Error in {self.worker_name}: {ex}",
@@ -123,7 +119,7 @@ class BaseWorker(ABC):
             )
         finally:
             try:
-                self.stop()
+                self._stop()
             except BaseException as err:
                 self._logger.error(
                     f"Error when EXIT in {self.worker_name}: {err}",
@@ -148,8 +144,3 @@ class BaseWorker(ABC):
                     )
                 else:
                     break
-
-    def task(self):
-        self._logger.info(f"{self.worker_name} task started")
-        self._task()
-        self._logger.warning(f"Normal exit from {self.worker_name}")

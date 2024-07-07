@@ -29,9 +29,9 @@ class FullDocument(str, Enum):
 
 
 class NewTopicConfiguration(BaseModel):
-    new_topic_num_partitions: int
-    new_topic_replication_factor: int
-    new_topic_config: dict[str, str]
+    new_topic_num_partitions: int = 1
+    new_topic_replication_factor: int = 1
+    new_topic_config: dict[str, str] = {}
 
 
 class Settings(BaseModel):
@@ -41,8 +41,8 @@ class Settings(BaseModel):
     producers_count: int
     max_queue_size: int  # TODO: check that value 2 times more then self.producers_count
     token_mongo_uri: str
-    token_database: str
-    token_collection: str
+    token_database: str = 'change-stream-database'
+    token_collection: str = 'ChangeStreamTokens'
     pipeline: str = None
     database: str | None = None
     collection: str | None = None

@@ -1,7 +1,8 @@
 import time
 from typing import Iterator
 
-from pymongo_change_stream_reader.models import CommitEvent, CommittableEvents
+from pymongo_change_stream_reader.models import CommitEvent, CommittableEvents, \
+    RecheckCommitEvent
 
 
 class ProcessCommitEvent:
@@ -12,6 +13,9 @@ class ProcessCommitEvent:
         self._last_commit_time: float = time.monotonic()
         self._max_uncommitted_events = max_uncommitted_events
         self._commit_interval = commit_interval
+
+    def process_recheck_event(self, event: RecheckCommitEvent):
+        raise NotImplementedError
 
     def process_event(self, event: CommitEvent) -> Iterator[CommittableEvents]:
         if event.need_confirm:
