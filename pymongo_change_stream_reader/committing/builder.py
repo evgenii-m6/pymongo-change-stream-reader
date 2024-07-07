@@ -1,10 +1,17 @@
 from asyncio import Queue
 from multiprocessing import Process
 
-from .committer import CommitFlow
+from pymongo import MongoClient
+
 from pymongo_change_stream_reader.settings import Settings
 from pymongo_change_stream_reader.utils import TaskIdGenerator
 from pymongo_change_stream_reader.models import ProcessData
+from pymongo_change_stream_reader.app_context import ApplicationContext
+from pymongo_change_stream_reader.base_worker import BaseWorker
+from .commit_processing import ProcessCommitEvent
+from .commit_event_handler import CommitEventHandler
+from .commit_flow import CommitFlow
+from .token_saver import TokenSaving
 
 
 def build_commit_process(
@@ -33,10 +40,58 @@ def build_commit_process(
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
     }
-    process = Process(target=run_commit_flow, kwargs=kwargs)
+    process = Process(target=CommitFlowContext.run_application, kwargs=kwargs)
     return ProcessData(task_id=task_id, process=process, kwargs=kwargs)
 
 
-def run_commit_flow(**kwargs):
-    worker = CommitFlow(**kwargs)
-    worker.run()
+def build_commit_worker(
+    manager_pid: int,
+    manager_create_time: float,
+    task_id: int,
+    request_queue: Queue,
+    response_queue: Queue,
+    committer_queue: Queue,
+    stream_reader_name: str,
+    token_mongo_uri: str,
+    token_database: str,
+    token_collection: str,
+    commit_interval: int,
+    max_uncommitted_events: int,
+    queue_get_timeout: int,
+    queue_put_timeout: int,
+) -> BaseWorker:
+    token_mongo_client = MongoClient(host=token_mongo_uri)
+    commit_event_processor = ProcessCommitEvent(
+        max_uncommitted_events=max_uncommitted_events,
+        commit_interval=commit_interval,
+    )
+    token_saver = TokenSaving(
+        token_mongo_client=token_mongo_client,
+        token_database=token_database,
+        token_collection=token_collection,
+    )
+    commit_event_handler = CommitEventHandler(
+        stream_reader_name=stream_reader_name,
+        commit_event_processor=commit_event_processor,
+        token_saver=token_saver,
+    )
+    application = CommitFlow(
+        committer_queue=committer_queue,
+        commit_event_handler=commit_event_handler,
+        queue_get_timeout=queue_get_timeout,
+    )
+    worker = BaseWorker(
+        manager_pid=manager_pid,
+        manager_create_time=manager_create_time,
+        task_id=task_id,
+        request_queue=request_queue,
+        response_queue=response_queue,
+        queue_get_timeout=queue_get_timeout,
+        queue_put_timeout=queue_put_timeout,
+        application=application,
+    )
+    return worker
+
+
+class CommitFlowContext(ApplicationContext):
+    build_worker = staticmethod(build_commit_worker)
