@@ -1,8 +1,11 @@
 import time
 from typing import Iterator
 
-from pymongo_change_stream_reader.models import CommitEvent, CommittableEvents, \
-    RecheckCommitEvent
+from pymongo_change_stream_reader.models import (
+    CommitEvent,
+    CommittableEvents,
+    RecheckCommitEvent,
+)
 
 
 class ProcessCommitEvent:
@@ -15,10 +18,9 @@ class ProcessCommitEvent:
         self._commit_interval = commit_interval
 
     def process_recheck_event(
-        self,
-        event: RecheckCommitEvent
+        self, event: RecheckCommitEvent
     ) -> Iterator[CommittableEvents]:
-        yield from self.process_events_chain()
+        yield from self._process_events_chain()
 
     def process_event(self, event: CommitEvent) -> Iterator[CommittableEvents]:
         if event.need_confirm:
@@ -26,44 +28,42 @@ class ProcessCommitEvent:
         else:
             yield from self._process_confirmed_event(event)
 
+    # tested
     def _process_unconfirmed_event(self, event: CommitEvent) -> None:
         self._unconfirmed_events[event.count] = event
 
+    # need retest
     def _process_confirmed_event(
-        self,
-        event: CommitEvent
+        self, event: CommitEvent
     ) -> Iterator[CommittableEvents]:
         self._update_confirmed_events(event)
-        yield from self.process_events_chain()
+        yield from self._process_events_chain()
 
-    def process_events_chain(self) -> Iterator[CommittableEvents]:
+    def _process_events_chain(self) -> Iterator[CommittableEvents]:
         commit_events = self._get_committable_events()
         if self._is_need_commit_events(commit_events):
             yield commit_events  # type: ignore
             self._clear_previous_commit_events(commit_events)
 
+    # tested
     def _update_confirmed_events(self, event: CommitEvent) -> None:
         if event.count in self._unconfirmed_events:
             token = self._get_actual_token(
-                unconfirmed_event=self._unconfirmed_events[event.count],
-                confirmed_event=event,
+                unconfirmed_token=self._unconfirmed_events[event.count].resume_token,
+                confirmed_token=event.resume_token,
             )
             self._confirmed_events[event.count] = CommitEvent(
-                count=event.count,
-                need_confirm=False,
-                resume_token=token
+                count=event.count, need_confirm=False, resume_token=token
             )
             del self._unconfirmed_events[event.count]
         else:
             self._confirmed_events[event.count] = event
 
+    # tested
     @staticmethod
     def _get_actual_token(
-        unconfirmed_event: CommitEvent,
-        confirmed_event: CommitEvent
+        unconfirmed_token: bytes | None, confirmed_token: bytes | None
     ) -> bytes | None:
-        unconfirmed_token = unconfirmed_event.resume_token
-        confirmed_token = confirmed_event.resume_token
         if unconfirmed_token and not confirmed_token:
             return unconfirmed_token
         elif not unconfirmed_token and not confirmed_token:
@@ -79,6 +79,8 @@ class ProcessCommitEvent:
         while True:
             if commit_event_count in self._confirmed_events:
                 event = self._confirmed_events[commit_event_count]
+                if event.need_confirm:
+                    break
                 if event.resume_token:
                     confirmed_numbers_with_tokens.append(event.count)
                 commit_event_count += 1
@@ -89,13 +91,16 @@ class ProcessCommitEvent:
             last_number = confirmed_numbers_with_tokens[-1]
             event = self._confirmed_events[last_number]
             return CommittableEvents(
-                numbers=list(range(self._last_sent_commit_event+1, last_number+1)),
-                resume_token=event.resume_token
+                numbers=list(range(self._last_sent_commit_event + 1, last_number + 1)),
+                resume_token=event.resume_token,
             )
         else:
             return None
 
-    def _is_need_commit_events(self, events: CommittableEvents | None) -> bool:
+    # tested
+    def _is_need_commit_events(
+        self, events: CommittableEvents | None
+    ) -> bool:  # tested
         if events is None:
             return False
         if time.monotonic() - self._last_commit_time > self._commit_interval:
@@ -104,6 +109,7 @@ class ProcessCommitEvent:
             return True
         return False
 
+    # test need approve
     def _clear_previous_commit_events(self, events: CommittableEvents) -> None:
         for number in events.numbers:
             if number in self._confirmed_events:
