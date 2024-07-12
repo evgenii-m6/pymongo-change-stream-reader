@@ -1,5 +1,4 @@
-from asyncio import Queue
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from typing import Any
 
 from confluent_kafka import Producer as KafkaProducer
@@ -11,6 +10,7 @@ from pymongo_change_stream_reader.models import ProcessData
 from pymongo_change_stream_reader.settings import Settings, NewTopicConfiguration
 from pymongo_change_stream_reader.utils import TaskIdGenerator
 from .change_event_handler import ChangeEventHandler
+from .kafka_wrapper import KafkaClient
 from .producer import Producer
 from .producer_flow import ProducerFlow
 
@@ -68,24 +68,24 @@ def build_producer_worker(
     queue_get_timeout: int,
     queue_put_timeout: int,
 ) -> BaseWorker:
-    new_topic_configu = NewTopicConfiguration.parse_obj(new_topic_configuration)
+    new_topic_config = NewTopicConfiguration.parse_obj(new_topic_configuration)
 
-    kafka_config = {}
-    kafka_config.update(kafka_producer_config)
-    kafka_config.update(
+    producer_config = {}
+    producer_config.update(kafka_producer_config)
+    producer_config.update(
         {
             'bootstrap.servers': kafka_bootstrap_servers,  # Kafka broker address
             'client.id': f"producer_{stream_reader_name}_{task_id}"
         }
     )
-    kafka_producer = KafkaProducer(kafka_producer_config)
-    kafka_admin = AdminClient(
-        {'bootstrap.servers': kafka_bootstrap_servers}
+    admin_config = {'bootstrap.servers': kafka_bootstrap_servers}
+    kafka_client = KafkaClient(
+        producer_config=producer_config,
+        admin_config=admin_config
     )
     producer = Producer(
-        kafka_producer=kafka_producer,
-        kafka_admin=kafka_admin,
-        new_topic_configuration=new_topic_configu,
+        kafka_client=kafka_client,
+        new_topic_configuration=new_topic_config,
     )
     change_event_handler = ChangeEventHandler(
         kafka_client=producer,

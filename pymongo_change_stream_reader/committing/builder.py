@@ -1,5 +1,4 @@
-from asyncio import Queue
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 
 from pymongo import MongoClient
 
