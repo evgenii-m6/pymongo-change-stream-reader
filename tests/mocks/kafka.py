@@ -1,6 +1,0 @@
-class MockProducer:
-    ...
-
-
-class MockAdminClient:
-    ...

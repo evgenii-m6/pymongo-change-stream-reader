@@ -1,5 +1,4 @@
-from multiprocessing import Process
-from multiprocessing import Queue
+from multiprocessing import Process, Queue
 
 from bson.raw_bson import RawBSONDocument
 from pymongo import MongoClient

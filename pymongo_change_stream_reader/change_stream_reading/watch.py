@@ -4,6 +4,7 @@ from typing import Iterator, Mapping, Any
 
 from bson.raw_bson import RawBSONDocument
 from pymongo import MongoClient
+from pymongo.change_stream import ChangeStream
 from pymongo.collection import Collection
 from pymongo.database import Database
 
@@ -35,35 +36,12 @@ class ChangeStreamWatch:
         self._database = database
         self._mongo_client = mongo_client
         self._pipeline = pipeline
-        self._watcher = self._get_watcher()
         self._full_document_before_change = full_document_before_change
         self._full_document = full_document
         self._reader_batch_size = reader_batch_size
         self._counter = 0
         self._should_run = False
         self._logger = logger
-
-    def exit_gracefully(self):
-        self._should_run = False
-
-    def start(self):
-        self._logger.info("Connecting to mongo")
-        server_info = self._mongo_client.server_info()
-        self._logger.info(f"Connected to mongo server: {server_info}")
-        self._should_run = True
-
-    def stop(self):
-        self._should_run = False
-        self._mongo_client.close()
-
-    def _get_watch_context(self, resume_after: Mapping[str, Any] | None = None):
-        return self._watcher.watch(
-            pipeline=self._pipeline,
-            resume_after=resume_after,
-            full_document_before_change=self._full_document_before_change.value,
-            full_document=self._full_document.value,
-            batch_size=self._reader_batch_size
-        )
 
     def _get_watcher(self) -> MongoClient | Database | Collection:
         if self._collection is not None and self._database is None:
@@ -79,18 +57,38 @@ class ChangeStreamWatch:
             watcher = self._mongo_client
         return watcher
 
-    def iter(self, resume_token:  Mapping[str, Any] | None) -> Iterator[ChangeEvent]:
-        with self._watcher.watch(
+    def exit_gracefully(self):
+        self._should_run = False
+
+    def start(self):
+        self._logger.info("Connecting to mongo")
+        server_info = self._mongo_client.server_info()
+        self._logger.info(f"Connected to mongo server: {server_info}")
+        self._should_run = True
+
+    def stop(self):
+        self._should_run = False
+        self._mongo_client.close()
+
+    def _get_stream_context_manager(
+        self,
+        resume_after: Mapping[str, Any] | None = None
+    ) -> ChangeStream:
+        watcher = self._get_watcher()
+        return watcher.watch(
             pipeline=self._pipeline,
-            resume_after=resume_token,
+            resume_after=resume_after,
             full_document_before_change=self._full_document_before_change.value,
             full_document=self._full_document.value,
             batch_size=self._reader_batch_size
-        ) as stream:
-            while stream.alive and self._should_run:
-                change = stream.try_next()
-                resume_token = stream.resume_token
-                yield from self._build_change_event(change, resume_token)
+        )
+
+    def iter(self, resume_token:  Mapping[str, Any] | None) -> Iterator[ChangeEvent]:
+        with self._get_stream_context_manager(resume_token) as stream_context:
+            while stream_context.alive and self._should_run:
+                change = stream_context.try_next()
+                resume_token = stream_context.resume_token
+                yield from self._iter_change_event(change, resume_token)
 
     def _iter_change_event(self, change, resume_token) -> Iterator[ChangeEvent]:
         event = self._build_change_event(

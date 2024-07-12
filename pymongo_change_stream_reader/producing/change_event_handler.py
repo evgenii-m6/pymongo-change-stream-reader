@@ -4,7 +4,6 @@ from multiprocessing import Queue
 from bson import json_util
 
 from pymongo_change_stream_reader.models import DecodedChangeEvent
-from pymongo_change_stream_reader.settings import NewTopicConfiguration
 from .producer import Producer
 
 default_logger = logging.Logger(__name__, logging.INFO)

@@ -1,4 +1,4 @@
-def test_import():
+def test_import(change_handler):
     import pymongo_change_stream_reader.change_stream_reading
     import pymongo_change_stream_reader.committing
     import pymongo_change_stream_reader.managing
