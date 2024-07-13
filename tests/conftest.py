@@ -2,12 +2,14 @@ from multiprocessing import Queue
 from queue import Empty
 
 import pytest
+from bson.raw_bson import RawBSONDocument
 
 from pymongo_change_stream_reader.change_stream_reading import (
     RetrieveResumeToken,
     ChangeStreamWatch,
     ChangeHandler, ChangeStreamReader,
 )
+from tests.mocks.events import events, events_raw_bson
 from tests.mocks.mongo_client import ChangeStreamMock, MongoClientMock
 
 
@@ -18,16 +20,35 @@ def change_stream() -> ChangeStreamMock:
 
 @pytest.fixture
 def mongo_client(change_stream) -> MongoClientMock:
+    return MongoClientMock(
+        "test_url",
+        change_stream=change_stream,
+        document_class=RawBSONDocument
+    )
+
+
+@pytest.fixture
+def fill_oplog_with_events_raw_bson(change_stream):
+    change_stream.values = events_raw_bson()
+
+
+@pytest.fixture
+def fill_oplog_with_events(change_stream):
+    change_stream.values = events_raw_bson()
+
+
+@pytest.fixture
+def token_mongo_client(change_stream) -> MongoClientMock:
     return MongoClientMock("test_url", change_stream=change_stream)
 
 
 @pytest.fixture
-def token_retriever(mongo_client) -> RetrieveResumeToken:
+def token_retriever(token_mongo_client) -> RetrieveResumeToken:
     return RetrieveResumeToken(
-        stream_reader_name="test_stream_reader_name",
-        token_mongo_client=mongo_client,  # type: ignore
-        token_database="test_token_database",
-        token_collection="test_token_collection",
+        stream_reader_name="test-stream-reader-name",
+        token_mongo_client=token_mongo_client,  # type: ignore
+        token_database="test-database",
+        token_collection="SavedToken",
     )
 
 

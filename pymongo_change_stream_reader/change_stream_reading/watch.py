@@ -90,7 +90,11 @@ class ChangeStreamWatch:
                 resume_token = stream_context.resume_token
                 yield from self._iter_change_event(change, resume_token)
 
-    def _iter_change_event(self, change, resume_token) -> Iterator[ChangeEvent]:
+    def _iter_change_event(
+        self,
+        change: RawBSONDocument | None,
+        resume_token: RawBSONDocument | None
+    ) -> Iterator[ChangeEvent]:
         event = self._build_change_event(
             change=change,
             resume_token=resume_token

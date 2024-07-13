@@ -68,7 +68,7 @@ class RetrieveResumeToken:
         )
 
         self._logger.info(f"Close connection to mongo token server")
-        return
+        return received_saved_token
 
     def _parse_token_model(
         self,

@@ -40,7 +40,7 @@ class ChangeHandler:
         )
 
     def _is_need_to_send_to_producer(self, bson_document: RawBSONDocument) -> int:
-        operation_type = decode(bson_document["operationType"].raw)
+        operation_type = bson_document["operationType"]
         if operation_type in self._allowed_operation_types:
             return 1
         else:
