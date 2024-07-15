@@ -93,16 +93,18 @@ class ChangeEventHandler:
         """
 
         def wrapped(err, msg):
-            need_confirm = 0
-            message = (
-                count.to_bytes(length=8, byteorder='big') +
-                need_confirm.to_bytes(length=1, byteorder='big')
-            )
-            self._committer_queue.put(message)
             if err:
                 self._should_run = False
                 self._logger.error(
                     f"Error when send message {count} to kafka: {err}",
                     stack_info=True
                 )
+            else:
+                need_confirm = 0
+                message = (
+                    count.to_bytes(length=8, byteorder='big') +
+                    need_confirm.to_bytes(length=1, byteorder='big')
+                )
+                self._committer_queue.put(message)
+
         return wrapped
