@@ -22,7 +22,7 @@ class CommitFlow(BaseApplication):
         committer_queue: Queue,
         commit_event_handler: CommitEventHandler,
         logger: logging.Logger = default_logger,
-        queue_get_timeout: int = 10,
+        queue_get_timeout: float = 10,
     ):
         super().__init__()
         self._commit_event_handler = commit_event_handler

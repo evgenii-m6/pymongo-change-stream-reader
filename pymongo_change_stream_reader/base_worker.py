@@ -29,8 +29,8 @@ class BaseWorker(ABC):
         response_queue: Queue,
         application: BaseApplication,
         logger: logging.Logger = default_logger,
-        queue_get_timeout: int = 1,
-        queue_put_timeout: int = 10,
+        queue_get_timeout: float = 1,
+        queue_put_timeout: float = 10,
     ):
         self._manager_pid = manager_pid
         self._manager_create_time = manager_create_time
@@ -38,8 +38,8 @@ class BaseWorker(ABC):
         self._task_id = task_id
         self._request_queue = request_queue
         self._response_queue = response_queue
-        self._queue_put_timeout: int = queue_put_timeout
-        self._queue_get_timeout: int = queue_get_timeout
+        self._queue_put_timeout = queue_put_timeout
+        self._queue_get_timeout = queue_get_timeout
         self._logger = logger
         self._application = application
 

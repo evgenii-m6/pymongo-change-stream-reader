@@ -13,7 +13,7 @@ class ChangeHandler:
         self,
         committer_queue: Queue,
         producer_queues: dict[int, Queue],
-        queue_put_timeout: int = 10,
+        queue_put_timeout: float = 10,
     ):
         self._committer_queue = committer_queue
         self._queue_put_timeout = queue_put_timeout

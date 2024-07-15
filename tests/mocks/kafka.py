@@ -16,8 +16,8 @@ class KafkaClientMock:
         self._cluster_metadata = ClusterMetadata()
         default_topic_1 = TopicMetadata()
         default_topic_2 = TopicMetadata()
-        default_topic_1.topic = "test-topic"
-        default_topic_2.topic = "other-topic"
+        default_topic_1.topic = "test.topic"
+        default_topic_2.topic = "other.topic"
         self._cluster_metadata.topics[default_topic_1.topic] = default_topic_1
         self._cluster_metadata.topics[default_topic_2.topic] = default_topic_2
 

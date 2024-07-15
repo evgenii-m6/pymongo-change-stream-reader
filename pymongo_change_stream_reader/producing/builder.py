@@ -65,8 +65,8 @@ def build_producer_worker(
     new_topic_configuration: dict[str, Any],
     kafka_prefix: str,
     kafka_producer_config: dict[str, str],
-    queue_get_timeout: int,
-    queue_put_timeout: int,
+    queue_get_timeout: float,
+    queue_put_timeout: float,
 ) -> BaseWorker:
     new_topic_config = NewTopicConfiguration.parse_obj(new_topic_configuration)
 

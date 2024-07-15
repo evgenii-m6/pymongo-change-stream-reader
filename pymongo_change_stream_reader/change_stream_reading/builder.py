@@ -77,8 +77,8 @@ def build_change_stream_reader_worker(
     ),
     full_document: FullDocument = FullDocument.when_available,
     reader_batch_size: int | None = None,
-    queue_get_timeout: int = 1,
-    queue_put_timeout: int = 10,
+    queue_get_timeout: float = 1,
+    queue_put_timeout: float = 10,
 ) -> BaseWorker:
     token_mongo_client = MongoClient(
         host=token_mongo_uri,

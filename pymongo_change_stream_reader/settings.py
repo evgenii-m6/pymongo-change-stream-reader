@@ -51,8 +51,8 @@ class Settings(BaseModel):
     )
     full_document: FullDocument = FullDocument.when_available
     reader_batch_size: int | None = None
-    queue_put_timeout: int = 10
-    queue_get_timeout: int = 1
+    queue_put_timeout: float = 10.0
+    queue_get_timeout: float = 1.0
     program_start_timeout: int = 60
     program_graceful_stop_timeout: int = 20
     commit_interval: int = 30

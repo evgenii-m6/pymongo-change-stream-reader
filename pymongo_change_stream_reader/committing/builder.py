@@ -56,8 +56,8 @@ def build_commit_worker(
     token_collection: str,
     commit_interval: int,
     max_uncommitted_events: int,
-    queue_get_timeout: int,
-    queue_put_timeout: int,
+    queue_get_timeout: float,
+    queue_put_timeout: float,
 ) -> BaseWorker:
     token_mongo_client = MongoClient(host=token_mongo_uri)
     commit_event_processor = ProcessCommitEvent(

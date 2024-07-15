@@ -18,7 +18,7 @@ class ProducerFlow(BaseApplication):
         producer_queue: Queue,
         event_handler: ChangeEventHandler,
         logger: logging.Logger = default_logger,
-        queue_get_timeout: int = 1,
+        queue_get_timeout: float = 1,
     ):
         super().__init__()
         self._producer_queue = producer_queue
