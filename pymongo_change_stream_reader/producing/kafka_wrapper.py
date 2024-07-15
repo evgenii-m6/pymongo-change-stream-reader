@@ -1,3 +1,4 @@
+from concurrent.futures import Future
 from typing import Callable
 
 from confluent_kafka import Producer
@@ -30,10 +31,16 @@ class KafkaClient:
     def stop(self):
         ...
 
-    def create_topics(self, new_topics: list[NewTopic]):
+    def create_topics(self, new_topics: list[NewTopic]) -> dict[str, Future]:
         return self._admin.create_topics(new_topics)
 
-    def produce(self, topic: str, key: bytes, value: bytes, on_delivery: Callable):
+    def produce(
+        self,
+        topic: str,
+        key: bytes,
+        value: bytes,
+        on_delivery: Callable
+    ) -> None:
         return self._producer.produce(
             topic=topic,
             key=key,

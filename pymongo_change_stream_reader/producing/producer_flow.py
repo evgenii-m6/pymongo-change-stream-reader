@@ -36,19 +36,22 @@ class ProducerFlow(BaseApplication):
         self._event_handler.stop()
 
     def task(self):
-        for event in self.iter_change_events():
+        while self._should_run:
+            self._get_change_event_and_process()
+
+    def _get_change_event_and_process(self):
+        for event in self._iter_change_event():
             self._event_handler.handle(event)
 
-    def iter_change_events(self) -> Iterator[DecodedChangeEvent]:
-        while self._should_run:
-            try:
-                result = self._producer_queue.get(timeout=self._queue_get_timeout)
-            except Empty as ex:
-                continue
+    def _iter_change_event(self) -> Iterator[DecodedChangeEvent]:
+        try:
+            result = self._producer_queue.get(timeout=self._queue_get_timeout)
+        except Empty as ex:
+            result = None
 
-            if result:
-                event = self._decode_data(result)
-                yield event
+        if result:
+            event = self._decode_data(result)
+            yield event
 
     @staticmethod
     def _decode_data(data: bytes) -> DecodedChangeEvent:

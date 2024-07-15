@@ -7,3 +7,4 @@ def test_smoke_change_stream_reading_application(
 ):
     change_stream_reading_application.start()
     change_stream_reading_application.task()
+    a=1

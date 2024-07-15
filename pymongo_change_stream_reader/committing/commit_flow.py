@@ -40,24 +40,27 @@ class CommitFlow(BaseApplication):
         self._commit_event_handler.stop()
 
     def task(self):
-        for event in self.iter_events():
+        while self._should_run:
+            self._get_change_event_and_process()
+
+    def _get_change_event_and_process(self) -> None:
+        for event in self.iter_event():
             if isinstance(event, CommitEvent):
                 self._commit_event_handler.handle_commit_event(event)
             elif isinstance(event, RecheckCommitEvent):
                 self._commit_event_handler.handle_recheck_event(event)
 
-    def iter_events(self) -> Iterator[CommitEvent | RecheckCommitEvent]:
-        while self._should_run:
-            try:
-                result = self._committer_queue.get(
-                    timeout=self._queue_get_timeout
-                )
-            except Empty as ex:
-                yield RecheckCommitEvent()
-            else:
-                if result:
-                    event = self._decode_commit_event(result)
-                    yield event
+    def iter_event(self) -> Iterator[CommitEvent | RecheckCommitEvent]:
+        try:
+            result = self._committer_queue.get(
+                timeout=self._queue_get_timeout
+            )
+        except Empty as ex:
+            yield RecheckCommitEvent()
+        else:
+            if result:
+                event = self._decode_commit_event(result)
+                yield event
 
     @staticmethod
     def _decode_commit_event(data: bytes) -> CommitEvent:
