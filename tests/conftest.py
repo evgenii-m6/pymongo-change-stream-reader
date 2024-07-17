@@ -9,6 +9,8 @@ from pymongo_change_stream_reader.change_stream_reading import (
     ChangeStreamWatch,
     ChangeHandler, ChangeStreamReader,
 )
+from pymongo_change_stream_reader.committing import ProcessCommitEvent, TokenSaving, \
+    CommitEventHandler, CommitFlow
 from pymongo_change_stream_reader.producing import Producer, ChangeEventHandler, \
     ProducerFlow
 from pymongo_change_stream_reader.settings import NewTopicConfiguration
@@ -131,12 +133,32 @@ def producer_queues(producer_queue_0, producer_queue_1):
 
 
 @pytest.fixture
-def token_retriever(token_mongo_client) -> RetrieveResumeToken:
+def stream_reader_name() -> str:
+    return "test-stream-reader-name"
+
+
+@pytest.fixture
+def token_database() -> str:
+    return "test-database"
+
+
+@pytest.fixture
+def token_collection() -> str:
+    return "SavedToken"
+
+
+@pytest.fixture
+def token_retriever(
+    token_mongo_client,
+    token_database,
+    token_collection,
+    stream_reader_name,
+) -> RetrieveResumeToken:
     return RetrieveResumeToken(
-        stream_reader_name="test-stream-reader-name",
+        stream_reader_name=stream_reader_name,
         token_mongo_client=token_mongo_client,  # type: ignore
-        token_database="test-database",
-        token_collection="SavedToken",
+        token_database=token_database,
+        token_collection=token_collection,
     )
 
 
@@ -167,4 +189,44 @@ def change_stream_reading_application(
         token_retriever=token_retriever,
         watcher=change_stream_watcher,
         change_handler=change_handler,
+    )
+
+
+@pytest.fixture
+def process_commit_event():
+    return ProcessCommitEvent(max_uncommitted_events=1, commit_interval=0)
+
+
+@pytest.fixture
+def token_saving(token_mongo_client, token_database, token_collection):
+    return TokenSaving(
+        token_mongo_client=token_mongo_client,  # type: ignore
+        token_database=token_database,
+        token_collection=token_collection,
+    )
+
+
+@pytest.fixture
+def commit_event_handler(
+    token_mongo_client,
+    stream_reader_name,
+    process_commit_event,
+    token_saving,
+):
+    return CommitEventHandler(
+        stream_reader_name=stream_reader_name,  # type: ignore
+        commit_event_processor=process_commit_event,
+        token_saver=token_saving,
+    )
+
+
+@pytest.fixture
+def commit_flow(
+    committer_queue,
+    commit_event_handler
+):
+    return CommitFlow(
+        committer_queue=committer_queue,
+        commit_event_handler=commit_event_handler,
+        queue_get_timeout=0.001,
     )
