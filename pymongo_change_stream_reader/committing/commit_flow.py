@@ -65,7 +65,7 @@ class CommitFlow(BaseApplication):
     @staticmethod
     def _decode_commit_event(data: bytes) -> CommitEvent:
         count = int.from_bytes(data[0:8], byteorder='big')
-        need_confirm = bool.from_bytes(data[8], byteorder='big')
+        need_confirm = bool.from_bytes(data[8:9], byteorder='big')
         resume_token: bytes | None
 
         if len(data) > 9:

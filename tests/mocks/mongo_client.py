@@ -109,6 +109,9 @@ class CollectionMock(WatchMixin):
             ).dict()
         }
 
+    def create_index(self, *args, **kwargs):
+        ...
+
     def find_one(self, filter: dict) -> dict | None:
         if self.name == "SavedToken":
             if 'stream_reader_name' in filter:
