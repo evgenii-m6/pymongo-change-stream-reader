@@ -1,7 +1,7 @@
 import json
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from bson import json_util
 
@@ -62,6 +62,22 @@ class Settings(BaseModel):
     new_topic_config: str | None = None
     kafka_prefix: str = ""
     kafka_producer_config: str | None = None
+
+    @field_validator("pipeline")
+    @classmethod
+    def validate_mongo_pipeline(cls, v):
+        if v is not None:
+            Pipeline(pipeline=convert_bson(v))
+        else:
+            Pipeline(pipeline=[])
+        return v
+
+    @field_validator("new_topic_config", "kafka_producer_config")
+    @classmethod
+    def validate_kafka_config(cls, v):
+        if v is not None:
+            json.loads(v)
+        return v
 
     @property
     def cursor_pipeline(self) -> Pipeline:

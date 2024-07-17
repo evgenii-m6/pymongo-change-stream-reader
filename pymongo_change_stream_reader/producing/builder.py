@@ -1,5 +1,5 @@
 from multiprocessing import Process, Queue
-from typing import Any
+from typing import Any, Type
 
 from confluent_kafka import Producer as KafkaProducer
 from confluent_kafka.admin import AdminClient
@@ -16,6 +16,7 @@ from .producer_flow import ProducerFlow
 
 
 def build_producer_process(
+    application_context: Type[ApplicationContext],
     manager_pid: int,
     manager_create_time: float,
     task_id_generator: TaskIdGenerator,
@@ -23,9 +24,7 @@ def build_producer_process(
     request_queue: Queue,
     response_queue: Queue,
     committer_queue: Queue,
-    new_topic_configuration: NewTopicConfiguration,
     settings: Settings,
-    kafka_producer_config: dict,
 ) -> ProcessData:
     task_id = task_id_generator.get()
     kwargs = {
@@ -38,13 +37,13 @@ def build_producer_process(
         'committer_queue': committer_queue,
         'stream_reader_name': settings.stream_reader_name,
         'kafka_bootstrap_servers': settings.kafka_bootstrap_servers,
-        'new_topic_configuration': new_topic_configuration.dict(),
+        'new_topic_configuration': settings.new_topic_configuration.dict(),
         'kafka_prefix': settings.kafka_prefix,
-        'kafka_producer_config': kafka_producer_config,
+        'kafka_producer_config': settings.kafka_producer_config_dict,
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
     }
-    process = Process(target=ProducerFlowContext.run_application, kwargs=kwargs)
+    process = Process(target=application_context.run_application, kwargs=kwargs)
     return ProcessData(
         task_id=task_id,
         process=process,

@@ -1,4 +1,5 @@
 from multiprocessing import Process, Queue
+from typing import Type
 
 from pymongo import MongoClient
 
@@ -14,6 +15,7 @@ from .token_saver import TokenSaving
 
 
 def build_commit_process(
+    application_context: Type[ApplicationContext],
     manager_pid: int,
     manager_create_time: float,
     task_id_generator: TaskIdGenerator,
@@ -39,7 +41,7 @@ def build_commit_process(
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
     }
-    process = Process(target=CommitFlowContext.run_application, kwargs=kwargs)
+    process = Process(target=application_context.run_application, kwargs=kwargs)
     return ProcessData(task_id=task_id, process=process, kwargs=kwargs)
 
 
