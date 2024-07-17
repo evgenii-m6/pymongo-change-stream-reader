@@ -4,9 +4,11 @@ import signal
 import time
 from multiprocessing import Queue
 from queue import Empty
+from typing import Type
 
 import psutil
 
+from pymongo_change_stream_reader.app_context import ApplicationContext
 from pymongo_change_stream_reader.change_stream_reading import (
     build_change_stream_reader_process
 )
@@ -23,11 +25,7 @@ from pymongo_change_stream_reader.messages import (
 )
 from pymongo_change_stream_reader.models import ProcessData, Statuses, ChangeStatuses
 from pymongo_change_stream_reader.producing import build_producer_process
-from pymongo_change_stream_reader.settings import (
-    Settings,
-    NewTopicConfiguration,
-    Pipeline,
-)
+from pymongo_change_stream_reader.settings import Settings
 from pymongo_change_stream_reader.utils import TaskIdGenerator
 
 
@@ -37,17 +35,20 @@ default_logger = logging.Logger(__name__, logging.INFO)
 class Manager:
     def __init__(
         self,
+        change_stream_reader: Type[ApplicationContext],
+        producing: Type[ApplicationContext],
+        committing: Type[ApplicationContext],
         settings: Settings,
-        pipeline: Pipeline,
-        new_topic_configuration: NewTopicConfiguration,
         logger: logging.Logger = default_logger,
     ):
+        self._change_stream_reader = change_stream_reader
+        self._producing = producing
+        self._committing = committing
+
         self._pid = os.getpid()
         self._current_process = psutil.Process(self._pid)
         self._manager_create_time = self._current_process.create_time()
         self._settings = settings
-        self._pipeline = pipeline
-        self._new_topic_configuration = new_topic_configuration
         self._logger = logger
 
         self._task_id_generator = TaskIdGenerator()
@@ -88,6 +89,7 @@ class Manager:
         for i in range(self._settings.producers_count):
             request_queue = Queue(maxsize=1000)
             process_data = build_producer_process(
+                application_context=self._producing,
                 manager_pid=self._pid,
                 manager_create_time=self._manager_create_time,
                 task_id_generator=self._task_id_generator,
@@ -95,9 +97,7 @@ class Manager:
                 request_queue=request_queue,
                 response_queue=self._response_queue,
                 committer_queue=self._commit_queue,
-                new_topic_configuration=self._new_topic_configuration,
                 settings=self._settings,
-                kafka_producer_config=self._settings.kafka_producer_config_dict,
             )
             self._request_queues[process_data.task_id] = request_queue
             self._processes[process_data.task_id] = process_data
@@ -107,6 +107,7 @@ class Manager:
     def _build_change_log_reader(self) -> int:
         request_queue = Queue(maxsize=1000)
         process_data = build_change_stream_reader_process(
+            application_context=self._change_stream_reader,
             manager_pid=self._pid,
             manager_create_time=self._manager_create_time,
             task_id_generator=self._task_id_generator,
@@ -114,7 +115,6 @@ class Manager:
             request_queue=request_queue,
             response_queue=self._response_queue,
             committer_queue=self._commit_queue,
-            pipeline=self._pipeline.pipeline,
             settings=self._settings,
         )
         self._request_queues[process_data.task_id] = request_queue
@@ -124,6 +124,7 @@ class Manager:
     def _build_committer(self) -> int:
         request_queue = Queue(maxsize=1000)
         process_data = build_commit_process(
+            application_context=self._committing,
             manager_pid=self._pid,
             manager_create_time=self._manager_create_time,
             task_id_generator=self._task_id_generator,
@@ -236,9 +237,14 @@ class Manager:
 
         stop_started = time.monotonic()
         for task_id, process_data in self._processes.items():
-            process_data.process.join(
-                timeout=self._settings.program_graceful_stop_timeout
+            left_timeout = self._settings.program_graceful_stop_timeout - (
+                    time.monotonic() - stop_started
             )
+            if left_timeout > 0:
+                process_data.process.join(
+                    timeout=left_timeout
+                )
+
         left_timeout = self._settings.program_graceful_stop_timeout - (
                 time.monotonic() - stop_started
         )

@@ -1,4 +1,5 @@
 from multiprocessing import Process, Queue
+from typing import Type
 
 from bson.raw_bson import RawBSONDocument
 from pymongo import MongoClient
@@ -19,6 +20,7 @@ from .watch import ChangeStreamWatch
 
 
 def build_change_stream_reader_process(
+    application_context: Type[ApplicationContext],
     manager_pid: int,
     manager_create_time: float,
     task_id_generator: TaskIdGenerator,
@@ -26,7 +28,6 @@ def build_change_stream_reader_process(
     request_queue: Queue,
     response_queue: Queue,
     committer_queue: Queue,
-    pipeline: list[dict],
     settings: Settings,
 ) -> ProcessData:
     task_id = task_id_generator.get()
@@ -45,14 +46,14 @@ def build_change_stream_reader_process(
         'stream_reader_name': settings.stream_reader_name,
         'database': settings.database,
         'collection': settings.collection,
-        'pipeline': pipeline,
+        'pipeline': settings.cursor_pipeline.pipeline,
         'full_document_before_change': settings.full_document_before_change.value,
         'full_document': settings.full_document.value,
         'reader_batch_size': settings.reader_batch_size,
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
     }
-    process = Process(target=ChangeStreamReaderContext.run_application, kwargs=kwargs)
+    process = Process(target=application_context.run_application, kwargs=kwargs)
     return ProcessData(task_id=task_id, process=process, kwargs=kwargs)
 
 

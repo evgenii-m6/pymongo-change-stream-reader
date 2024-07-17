@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 from concurrent.futures import Future
 from copy import deepcopy
@@ -72,3 +73,21 @@ class KafkaClientMock:
     def list_topics(self) -> ClusterMetadata:
         self._producer
         return deepcopy(self._cluster_metadata)
+
+
+class KafkaClientFileWriter(KafkaClientMock):
+    def produce(
+        self,
+        topic: str,
+        key: bytes,
+        value: bytes,
+        on_delivery: Callable
+    ) -> None:
+        super().produce(topic=topic, key=key, value=value, on_delivery=on_delivery)
+        data_dict = {
+            "key": json.loads(key.decode()),
+            "value": json.loads(value.decode()),
+        }
+        data = "\n" + json.dumps(data_dict, indent=4)
+        with open(file=topic, mode='a+') as f:
+            f.write(data)
