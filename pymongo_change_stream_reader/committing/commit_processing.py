@@ -22,56 +22,70 @@ class ProcessCommitEvent:
     ) -> Iterator[CommittableEvents]:
         yield from self._process_events_chain()
 
-    def process_event(self, event: CommitEvent) -> Iterator[CommittableEvents]:
-        if event.need_confirm:
-            self._process_unconfirmed_event(event)
-        else:
-            yield from self._process_confirmed_event(event)
-
-    # tested
-    def _process_unconfirmed_event(self, event: CommitEvent) -> None:
-        self._unconfirmed_events[event.count] = event
-
-    # need retest
-    def _process_confirmed_event(
-        self, event: CommitEvent
-    ) -> Iterator[CommittableEvents]:
-        self._update_confirmed_events(event)
-        yield from self._process_events_chain()
-
     def _process_events_chain(self) -> Iterator[CommittableEvents]:
         commit_events = self._get_committable_events()
         if self._is_need_commit_events(commit_events):
             yield commit_events  # type: ignore
             self._clear_previous_commit_events(commit_events)
 
-    # tested
-    def _update_confirmed_events(self, event: CommitEvent) -> None:
-        if event.count in self._unconfirmed_events:
-            token = self._get_actual_token(
-                unconfirmed_token=self._unconfirmed_events[event.count].resume_token,
-                confirmed_token=event.resume_token,
-            )
-            self._confirmed_events[event.count] = CommitEvent(
-                count=event.count, need_confirm=False, resume_token=token
-            )
-            del self._unconfirmed_events[event.count]
+    def process_event(self, event: CommitEvent) -> Iterator[CommittableEvents]:
+        if event.need_confirm:
+            self._process_unconfirmed_event(event)
         else:
-            self._confirmed_events[event.count] = event
+            self._process_confirmed_event(event)
+        yield from self._process_events_chain()
 
     # tested
+    def _process_unconfirmed_event(self, event: CommitEvent) -> None:
+        if event.count > self._last_sent_commit_event:
+            if event.count not in self._confirmed_events:
+                if event.count in self._unconfirmed_events:
+                    token = self._get_actual_token(
+                        old_token=self._unconfirmed_events[
+                            event.count].resume_token,
+                        new_token=event.resume_token,
+                    )
+                    event = CommitEvent(
+                        count=event.count, need_confirm=True, resume_token=token
+                    )
+                self._unconfirmed_events[event.count] = event
+
+    def _process_confirmed_event(self, event: CommitEvent) -> None:
+        if event.count > self._last_sent_commit_event:
+            if event.count in self._unconfirmed_events:
+                token = self._get_actual_token(
+                    old_token=self._unconfirmed_events[event.count].resume_token,
+                    new_token=event.resume_token,
+                )
+                self._confirmed_events[event.count] = CommitEvent(
+                    count=event.count, need_confirm=False, resume_token=token
+                )
+                del self._unconfirmed_events[event.count]
+            else:
+                if event.count in self._confirmed_events:
+                    token = self._get_actual_token(
+                        old_token=self._confirmed_events[
+                            event.count].resume_token,
+                        new_token=event.resume_token,
+                    )
+                    event = CommitEvent(
+                        count=event.count, need_confirm=False, resume_token=token
+                    )
+
+                self._confirmed_events[event.count] = event
+
     @staticmethod
     def _get_actual_token(
-        unconfirmed_token: bytes | None, confirmed_token: bytes | None
+        old_token: bytes | None, new_token: bytes | None
     ) -> bytes | None:
-        if unconfirmed_token and not confirmed_token:
-            return unconfirmed_token
-        elif not unconfirmed_token and not confirmed_token:
+        if old_token and not new_token:
+            return old_token
+        elif not old_token and not new_token:
             return None
-        elif not unconfirmed_token and confirmed_token:
-            return confirmed_token
-        elif unconfirmed_token and confirmed_token:
-            return confirmed_token
+        elif not old_token and new_token:
+            return new_token
+        elif old_token and new_token:
+            return new_token
 
     def _get_committable_events(self) -> CommittableEvents | None:
         confirmed_numbers_with_tokens: list[int] = []
@@ -97,11 +111,10 @@ class ProcessCommitEvent:
         else:
             return None
 
-    # tested
     def _is_need_commit_events(
         self, events: CommittableEvents | None
     ) -> bool:  # tested
-        if events is None:
+        if events is None or len(events.numbers) == 0:
             return False
         if time.monotonic() - self._last_commit_time > self._commit_interval:
             return True
@@ -109,7 +122,6 @@ class ProcessCommitEvent:
             return True
         return False
 
-    # test need approve
     def _clear_previous_commit_events(self, events: CommittableEvents) -> None:
         for number in events.numbers:
             if number in self._confirmed_events:
@@ -117,3 +129,4 @@ class ProcessCommitEvent:
             if number in self._unconfirmed_events:
                 del self._unconfirmed_events[number]
             self._last_sent_commit_event = number
+            self._last_commit_time = time.monotonic()
