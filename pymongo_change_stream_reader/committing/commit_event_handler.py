@@ -32,13 +32,8 @@ class CommitEventHandler:
     def stop(self):
         self._token_saver.stop()
 
-    def handle_recheck_event(self, event: RecheckCommitEvent):
-        for committable_event in self._commit_event_processor.process_recheck_event(
-            event
-        ):
-            self._commit_events(committable_event)
-
-    def handle_commit_event(self, event: CommitEvent):
+    def handle_event(self, event: RecheckCommitEvent | CommitEvent):
+        self._logger.info(f"Process event: {event}")
         for committable_event in self._commit_event_processor.process_event(event):
             self._commit_events(committable_event)
 

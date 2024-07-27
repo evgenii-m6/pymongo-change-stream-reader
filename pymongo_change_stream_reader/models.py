@@ -20,7 +20,11 @@ class CommitEvent(NamedTuple):
 
 
 class RecheckCommitEvent:
-    ...
+    def __repr__(self):
+        return "RecheckCommitEvent"
+
+    def __str__(self):
+        return repr(self)
 
 
 class CommittableEvents(NamedTuple):

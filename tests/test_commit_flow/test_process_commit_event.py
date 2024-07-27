@@ -354,7 +354,7 @@ def test_confirmed_and_recheck(process_commit_event: ProcessCommitEvent):
 
     process_commit_event._commit_interval = 0
 
-    for commit in process_commit_event.process_recheck_event(event_2):
+    for commit in process_commit_event.process_event(event_2):
         assert commit.resume_token == b"test"
         assert commit.numbers == [1]
         assert count in process_commit_event._confirmed_events

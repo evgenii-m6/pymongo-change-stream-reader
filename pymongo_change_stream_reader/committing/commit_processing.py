@@ -1,4 +1,5 @@
 import time
+from functools import singledispatchmethod
 from typing import Iterator
 
 from pymongo_change_stream_reader.models import (
@@ -17,9 +18,22 @@ class ProcessCommitEvent:
         self._max_uncommitted_events = max_uncommitted_events
         self._commit_interval = commit_interval
 
+    @singledispatchmethod
+    def process_event(self, event) -> Iterator[CommittableEvents]:
+        raise NotImplementedError(f"Not implemented event type {type(event)}")
+
+    @process_event.register(RecheckCommitEvent)
     def process_recheck_event(
         self, event: RecheckCommitEvent
     ) -> Iterator[CommittableEvents]:
+        yield from self._process_events_chain()
+
+    @process_event.register(CommitEvent)
+    def process_commit_event(self, event: CommitEvent) -> Iterator[CommittableEvents]:
+        if event.need_confirm:
+            self._process_unconfirmed_event(event)
+        else:
+            self._process_confirmed_event(event)
         yield from self._process_events_chain()
 
     def _process_events_chain(self) -> Iterator[CommittableEvents]:
@@ -28,14 +42,6 @@ class ProcessCommitEvent:
             yield commit_events  # type: ignore
             self._clear_previous_commit_events(commit_events)
 
-    def process_event(self, event: CommitEvent) -> Iterator[CommittableEvents]:
-        if event.need_confirm:
-            self._process_unconfirmed_event(event)
-        else:
-            self._process_confirmed_event(event)
-        yield from self._process_events_chain()
-
-    # tested
     def _process_unconfirmed_event(self, event: CommitEvent) -> None:
         if event.count > self._last_sent_commit_event:
             if event.count not in self._confirmed_events:
