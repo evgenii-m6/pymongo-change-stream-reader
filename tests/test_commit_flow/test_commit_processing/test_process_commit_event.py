@@ -118,6 +118,27 @@ def test_get_actual_token(
     assert actual_token == process_commit_event._get_actual_token(old_token, new_token)
 
 
+def test_confirmed_with_error(process_commit_event: ProcessCommitEvent):
+    count = 1
+    initial_commit_time = process_commit_event._last_commit_time
+    event_1 = CommitEvent(count=count, need_confirm=False, resume_token=b"test")
+
+    with pytest.raises(ValueError) as er:
+        for commit in process_commit_event.process_event(event_1):
+            assert commit.resume_token == b"test"
+            assert commit.numbers == [1]
+            assert count in process_commit_event._confirmed_events
+            assert not process_commit_event._unconfirmed_events
+            assert process_commit_event._last_commit_time == initial_commit_time
+            assert process_commit_event._last_sent_commit_event == 0
+            time.sleep(0.001)
+            raise ValueError("test")
+
+    assert count in process_commit_event._confirmed_events
+    assert not process_commit_event._unconfirmed_events
+    assert process_commit_event._last_sent_commit_event == 0
+    assert process_commit_event._last_commit_time == initial_commit_time
+
 def test_confirmed_confirmed(process_commit_event: ProcessCommitEvent):
     count = 1
     initial_commit_time = process_commit_event._last_commit_time
