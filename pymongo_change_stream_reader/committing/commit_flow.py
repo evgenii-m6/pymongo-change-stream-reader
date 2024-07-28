@@ -6,6 +6,7 @@ from typing import Iterator
 from pymongo import MongoClient
 
 from pymongo_change_stream_reader.base_application import BaseApplication
+from pymongo_change_stream_reader.commit_event_decoder import decode_commit_event
 from pymongo_change_stream_reader.models import (
     CommitEvent, RecheckCommitEvent,
 )
@@ -45,10 +46,7 @@ class CommitFlow(BaseApplication):
 
     def _get_change_event_and_process(self) -> None:
         for event in self.iter_event():
-            if isinstance(event, CommitEvent):
-                self._commit_event_handler.handle_commit_event(event)
-            elif isinstance(event, RecheckCommitEvent):
-                self._commit_event_handler.handle_recheck_event(event)
+            self._commit_event_handler.handle_event(event)
 
     def iter_event(self) -> Iterator[CommitEvent | RecheckCommitEvent]:
         try:
@@ -59,22 +57,5 @@ class CommitFlow(BaseApplication):
             yield RecheckCommitEvent()
         else:
             if result:
-                event = self._decode_commit_event(result)
+                event = decode_commit_event(result)
                 yield event
-
-    @staticmethod
-    def _decode_commit_event(data: bytes) -> CommitEvent:
-        count = int.from_bytes(data[0:8], byteorder='big')
-        need_confirm = bool.from_bytes(data[8:9], byteorder='big')
-        resume_token: bytes | None
-
-        if len(data) > 9:
-            resume_token = data[9:]
-        else:
-            resume_token = None
-
-        return CommitEvent(
-            count=count,
-            need_confirm=need_confirm,
-            resume_token=resume_token
-        )

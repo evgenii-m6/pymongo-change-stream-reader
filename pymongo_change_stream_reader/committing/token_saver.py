@@ -2,7 +2,8 @@ import logging
 from typing import Any
 
 from bson import Binary
-from pymongo import MongoClient
+from pymongo import MongoClient, timeout
+from pymongo.errors import PyMongoError
 
 from pymongo_change_stream_reader.models import SavedToken
 
@@ -17,11 +18,15 @@ class TokenSaving:
         token_database: str,
         token_collection: str,
         logger: logging.Logger = default_logger,
+        write_timeout: float = 5.0,
+        on_timeout_retry_count: int = 3,
     ):
         self._token_mongo_client = token_mongo_client
         self._token_database = token_database
         self._token_collection = token_collection
         self._logger = logger
+        self._write_timeout = write_timeout
+        self._on_timeout_retry_count = on_timeout_retry_count
 
         self._collection = self._token_mongo_client.get_database(
             self._token_database
@@ -52,8 +57,34 @@ class TokenSaving:
 
     def save(self, token_data: SavedToken):
         replacement = self._transform_to_dict(token_data)
-        self._collection.replace_one(
-            filter={"stream_reader_name": token_data.stream_reader_name},
-            replacement=replacement,
-            upsert=True
-        )
+
+        count = 0
+        while count < self._on_timeout_retry_count:
+            try:
+                self._save(
+                    replacement=replacement,
+                    count=count,
+                )
+                break
+            except PyMongoError as exc:
+                if exc.timeout:
+                    self._logger.warning(f"Timeout when trying to save token: {exc!r}")
+                    count += 1
+                    if count >= self._on_timeout_retry_count:
+                        self._logger.error(
+                            f"Max retry count exceed when trying to save token: {exc!r}"
+                        )
+                        raise
+                else:
+                    self._logger.error(
+                      f"Failed to save token with non-timeout error: {exc!r}"
+                    )
+                    raise
+
+    def _save(self, replacement: dict, count: int):
+        with timeout(self._write_timeout*(count+1)):
+            self._collection.replace_one(
+                filter={"stream_reader_name": replacement["stream_reader_name"]},
+                replacement=replacement,
+                upsert=True
+            )

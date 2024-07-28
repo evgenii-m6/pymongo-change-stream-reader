@@ -36,6 +36,8 @@ def build_commit_process(
         'token_mongo_uri': settings.token_mongo_uri,
         'token_database': settings.token_database,
         'token_collection': settings.token_collection,
+        'token_save_timeout': settings.token_save_timeout,
+        'token_save_on_timeout_retry': settings.token_save_on_timeout_retry,
         'commit_interval': settings.commit_interval,
         'max_uncommitted_events': settings.max_uncommitted_events,
         'queue_get_timeout': settings.queue_get_timeout,
@@ -56,6 +58,8 @@ def build_commit_worker(
     token_mongo_uri: str,
     token_database: str,
     token_collection: str,
+    token_save_timeout: float,
+    token_save_on_timeout_retry: int,
     commit_interval: int,
     max_uncommitted_events: int,
     queue_get_timeout: float,
@@ -70,6 +74,8 @@ def build_commit_worker(
         token_mongo_client=token_mongo_client,
         token_database=token_database,
         token_collection=token_collection,
+        write_timeout=token_save_timeout,
+        on_timeout_retry_count=token_save_on_timeout_retry,
     )
     commit_event_handler = CommitEventHandler(
         stream_reader_name=stream_reader_name,

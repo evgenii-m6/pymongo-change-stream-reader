@@ -43,6 +43,8 @@ class Settings(BaseModel):
     token_mongo_uri: str
     token_database: str = 'change-stream-database'
     token_collection: str = 'ChangeStreamTokens'
+    token_save_timeout: float = 5.0,
+    token_save_on_timeout_retry: int = 3,
     pipeline: str = None
     database: str | None = None
     collection: str | None = None

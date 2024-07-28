@@ -3,6 +3,7 @@ from multiprocessing import Queue
 from bson.raw_bson import RawBSONDocument
 from bson import decode
 
+from pymongo_change_stream_reader.commit_event_decoder import encode_commit_event
 from pymongo_change_stream_reader.models import ChangeEvent
 
 
@@ -52,18 +53,11 @@ class ChangeHandler:
         count: int,
         need_confirm: int
     ):
-        """
-        Bytes: 0-7 - number of message
-        Bytes: 8 - is need to confirm from producers
-        Bytes: 9-end - resume_token
-        """
-        data: bytes = (
-            count.to_bytes(length=8, byteorder='big') +
-            need_confirm.to_bytes(length=1, byteorder='big')
+        data = encode_commit_event(
+            count=count,
+            need_confirm=need_confirm,
+            token=token
         )
-        if token:
-            data = data + token
-
         self._put_to_queue(
             queue=self._committer_queue,
             data=data,
@@ -87,5 +81,5 @@ class ChangeHandler:
         return queue_number
 
     @staticmethod
-    def _put_to_queue(queue: Queue, data: bytes, timeout: int):
+    def _put_to_queue(queue: Queue, data: bytes, timeout: float):
         queue.put(data, timeout=timeout)
