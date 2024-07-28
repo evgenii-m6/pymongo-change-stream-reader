@@ -1,7 +1,10 @@
 import logging
+import random
 from multiprocessing import Queue
+from time import sleep
 
 from bson import json_util
+from confluent_kafka import KafkaException
 
 from pymongo_change_stream_reader.models import DecodedChangeEvent
 from .producer import Producer
@@ -23,15 +26,20 @@ class ChangeEventHandler:
         committer_queue: Queue,
         kafka_prefix: str = "",
         logger: logging.Logger = default_logger,
+        max_create_topic_retry_count: int = 3,
     ):
         self._kafka_prefix = kafka_prefix
         self._created_topics: set[str] = set()
         self._kafka_client = kafka_client
         self._committer_queue = committer_queue
+        self._max_create_topic_retry_count = max_create_topic_retry_count
         self._logger = logger
 
     def start(self):
         self._kafka_client.start()
+        self._update_created_topics()
+
+    def _update_created_topics(self):
         topics = self._kafka_client.get_topics()
         for topic_name in topics:
             if topic_name.startswith(self._kafka_prefix):
@@ -41,9 +49,22 @@ class ChangeEventHandler:
         self._kafka_client.stop()
 
     def _maybe_create_topic(self, topic: str):
-        if topic not in self._created_topics:
-            self._kafka_client.create_topic(topic)
-            self._created_topics.add(topic)
+        count = 0
+        while count < self._max_create_topic_retry_count:
+            if topic not in self._created_topics:
+                self._update_created_topics()
+
+            if topic not in self._created_topics:
+                sleep(count + random.randint(0, 50) / 10)
+                try:
+                    self._kafka_client.create_topic(topic)
+                except KafkaException as ex:
+                    count += 1
+                    if count >= self._max_create_topic_retry_count:
+                        raise
+                else:
+                    self._created_topics.add(topic)
+                    break
 
     def handle(self, event: DecodedChangeEvent):
         topic = self._get_topic_from_event(event)

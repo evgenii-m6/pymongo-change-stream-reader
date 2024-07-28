@@ -39,6 +39,7 @@ def build_producer_process(
         'kafka_bootstrap_servers': settings.kafka_bootstrap_servers,
         'new_topic_configuration': settings.new_topic_configuration.dict(),
         'kafka_prefix': settings.kafka_prefix,
+        'max_create_topic_retry_count': settings.max_create_topic_retry_count,
         'kafka_producer_config': settings.kafka_producer_config_dict,
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
@@ -63,6 +64,7 @@ def build_producer_worker(
     kafka_bootstrap_servers: str,
     new_topic_configuration: dict[str, Any],
     kafka_prefix: str,
+    max_create_topic_retry_count: int,
     kafka_producer_config: dict[str, str],
     queue_get_timeout: float,
     queue_put_timeout: float,
@@ -90,6 +92,7 @@ def build_producer_worker(
         kafka_client=producer,
         committer_queue=committer_queue,
         kafka_prefix=kafka_prefix,
+        max_create_topic_retry_count=max_create_topic_retry_count
     )
     application = ProducerFlow(
         producer_queue=producer_queue,

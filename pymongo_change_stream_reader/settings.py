@@ -63,6 +63,7 @@ class Settings(BaseModel):
     new_topic_replication_factor: int = 1
     new_topic_config: str | None = None
     kafka_prefix: str = ""
+    max_create_topic_retry_count: int = 3
     kafka_producer_config: str | None = None
 
     @field_validator("pipeline")
