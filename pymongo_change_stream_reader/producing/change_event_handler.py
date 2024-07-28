@@ -49,10 +49,12 @@ class ChangeEventHandler:
         self._kafka_client.stop()
 
     def _maybe_create_topic(self, topic: str):
+        if topic in self._created_topics:
+            return
+
         count = 0
         while count < self._max_create_topic_retry_count:
-            if topic not in self._created_topics:
-                self._update_created_topics()
+            self._update_created_topics()
 
             if topic not in self._created_topics:
                 sleep(count + random.randint(0, 50) / 10)
