@@ -39,10 +39,10 @@ def build_producer_process(
         'kafka_bootstrap_servers': settings.kafka_bootstrap_servers,
         'new_topic_configuration': settings.new_topic_configuration.dict(),
         'kafka_prefix': settings.kafka_prefix,
-        'max_create_topic_retry_count': settings.max_create_topic_retry_count,
         'kafka_producer_config': settings.kafka_producer_config_dict,
         'queue_get_timeout': settings.queue_get_timeout,
         'queue_put_timeout': settings.queue_put_timeout,
+        'kafka_connect_timeout': settings.kafka_connect_timeout,
     }
     process = Process(target=application_context.run_application, kwargs=kwargs)
     return ProcessData(
@@ -64,27 +64,39 @@ def build_producer_worker(
     kafka_bootstrap_servers: str,
     new_topic_configuration: dict[str, Any],
     kafka_prefix: str,
-    max_create_topic_retry_count: int,
     kafka_producer_config: dict[str, str],
     queue_get_timeout: float,
     queue_put_timeout: float,
+    kafka_connect_timeout: float,
 ) -> BaseWorker:
     new_topic_config = NewTopicConfiguration.parse_obj(new_topic_configuration)
 
-    producer_config = {}
+    producer_config = {
+        "buffer.memory": 1024,
+        "delivery.timeout.ms": 120000,
+        "queue.buffering.max.messages": 1024,  # 1024 messages
+        "queue.buffering.max.kbytes": 1024 * 1024,  # 1 Gb
+    }
     producer_config.update(kafka_producer_config)
     producer_config.update(
         {
             'bootstrap.servers': kafka_bootstrap_servers,  # Kafka broker address
-            'client.id': f"producer_{stream_reader_name}_{task_id}"
+            'client.id': f"producer_{stream_reader_name}_{task_id}",
+            "enable.idempotence": True,
+            "max.in.flight.requests.per.connection": 5,
         }
     )
+    for i in ['retries']:
+        producer_config.pop(i, None)
+
     admin_config = {'bootstrap.servers': kafka_bootstrap_servers}
     kafka_client = KafkaClient(
         producer_config=producer_config,
-        admin_config=admin_config
+        admin_config=admin_config,
+        kafka_connect_timeout=kafka_connect_timeout,
     )
     producer = Producer(
+        task_id=task_id,
         kafka_client=kafka_client,
         new_topic_configuration=new_topic_config,
     )
@@ -92,7 +104,6 @@ def build_producer_worker(
         kafka_client=producer,
         committer_queue=committer_queue,
         kafka_prefix=kafka_prefix,
-        max_create_topic_retry_count=max_create_topic_retry_count
     )
     application = ProducerFlow(
         producer_queue=producer_queue,

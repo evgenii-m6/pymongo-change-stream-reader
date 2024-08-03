@@ -1,10 +1,8 @@
 import logging
-import random
 from multiprocessing import Queue
-from time import sleep
+from typing import Callable
 
 from bson import json_util
-from confluent_kafka import KafkaException
 
 from pymongo_change_stream_reader.models import DecodedChangeEvent
 from .producer import Producer
@@ -26,13 +24,11 @@ class ChangeEventHandler:
         committer_queue: Queue,
         kafka_prefix: str = "",
         logger: logging.Logger = default_logger,
-        max_create_topic_retry_count: int = 3,
     ):
         self._kafka_prefix = kafka_prefix
         self._created_topics: set[str] = set()
         self._kafka_client = kafka_client
         self._committer_queue = committer_queue
-        self._max_create_topic_retry_count = max_create_topic_retry_count
         self._logger = logger
 
     def start(self):
@@ -52,21 +48,11 @@ class ChangeEventHandler:
         if topic in self._created_topics:
             return
 
-        count = 0
-        while count < self._max_create_topic_retry_count:
-            self._update_created_topics()
+        self._update_created_topics()
 
-            if topic not in self._created_topics:
-                sleep(count + random.randint(0, 50) / 10)
-                try:
-                    self._kafka_client.create_topic(topic)
-                except KafkaException as ex:
-                    count += 1
-                    if count >= self._max_create_topic_retry_count:
-                        raise
-                else:
-                    self._created_topics.add(topic)
-                    break
+        if topic not in self._created_topics:
+            self._kafka_client.create_topic(topic)
+            self._created_topics.add(topic)
 
     def handle(self, event: DecodedChangeEvent):
         topic = self._get_topic_from_event(event)
@@ -76,6 +62,20 @@ class ChangeEventHandler:
             key=self._get_key_from_event(event),
             value=self._get_value_from_event(event),
             on_delivery=self._on_message_delivered(event.count)
+        )
+
+    def _produce_message(
+        self,
+        topic: str,
+        key: bytes,
+        value: bytes,
+        on_delivery: Callable
+    ):
+        self._kafka_client.produce(
+            topic=topic,
+            key=key,
+            value=value,
+            on_delivery=on_delivery,
         )
 
     def _get_topic_from_event(self, event: DecodedChangeEvent) -> str:
