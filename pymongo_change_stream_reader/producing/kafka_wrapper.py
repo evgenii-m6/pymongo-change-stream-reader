@@ -40,11 +40,11 @@ class KafkaClient:
     def start(self):
         self._kafka_producer = Producer(self._producer_config)
         self._kafka_admin = AdminClient(self._admin_config)
-        WithTimeout(
+        WithTimeout[ClusterMetadata](
             target=self._kafka_producer.list_topics,
             timeout=self._kafka_connect_timeout
         ).run()
-        WithTimeout(
+        WithTimeout[ClusterMetadata](
             target=self._kafka_admin.list_topics,
             timeout=self._kafka_connect_timeout
         ).run()
@@ -55,7 +55,7 @@ class KafkaClient:
         self._kafka_producer.flush()
 
     def create_topics(self, new_topics: list[NewTopic]) -> dict[str, Future]:
-        return WithTimeout(
+        return WithTimeout[dict[str, Future]](
             target=self._admin.create_topics(new_topics),
             timeout=self._kafka_connect_timeout
         ).run()
@@ -85,7 +85,7 @@ class KafkaClient:
             self._producer.poll(timeout=self._poll_timeout)
 
     def list_topics(self) -> ClusterMetadata:
-        return WithTimeout(
+        return WithTimeout[ClusterMetadata](
             target=self._producer.list_topics,
             timeout=self._kafka_connect_timeout
         ).run()
