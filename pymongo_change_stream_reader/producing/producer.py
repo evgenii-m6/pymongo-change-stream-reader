@@ -32,9 +32,12 @@ class Producer:
         self._logger.info(f"Connected to kafka")
 
     def stop(self):
+        self._logger.info("Disconnecting from kafka")
         self._kafka_client.stop()
+        self._logger.info(f"Disconnected from kafka")
 
     def create_topic(self, topic: str) -> None:
+        self._logger.info(f"Creating topic {topic}")
         replication_factor = self._new_topic_configuration.new_topic_replication_factor
         num_partitions = self._new_topic_configuration.new_topic_num_partitions
         config = self._new_topic_configuration.new_topic_config
@@ -47,11 +50,13 @@ class Producer:
         result: dict[str, Future] = self._kafka_client.create_topics([new_topic])
         try:
             result[topic].result()
+            self._logger.info(f"Created topic {topic}")
         except KafkaException as ex:
             kafka_error: KafkaError = ex.args[0]
             if kafka_error.code() == 36:  # TOPIC_ALREADY_EXISTS
                 self._logger.info(f"Topic {topic} already exists")
             else:
+                self._logger.error(f"Error when create topic {topic}: {ex!r}")
                 raise
 
     def produce(

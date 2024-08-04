@@ -74,6 +74,13 @@ class KafkaClientMock:
         self._producer
         return deepcopy(self._cluster_metadata)
 
+    def __len__(self):
+        return 0
+
+    def flush(self, timeout=None):
+        return len(self)
+
+
 
 class KafkaClientFileWriter(KafkaClientMock):
     def produce(
