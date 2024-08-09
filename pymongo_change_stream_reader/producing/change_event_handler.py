@@ -27,22 +27,22 @@ class ChangeEventHandler:
     ):
         self._kafka_prefix = kafka_prefix
         self._created_topics: set[str] = set()
-        self._kafka_client = kafka_client
+        self._producer = kafka_client
         self._committer_queue = committer_queue
         self._logger = logger
 
     def start(self):
-        self._kafka_client.start()
+        self._producer.start()
         self._update_created_topics()
 
     def _update_created_topics(self):
-        topics = self._kafka_client.get_topics()
+        topics = self._producer.get_topics()
         for topic_name in topics:
             if topic_name.startswith(self._kafka_prefix):
                 self._created_topics.add(topic_name)
 
     def stop(self):
-        self._kafka_client.stop()
+        self._producer.stop()
 
     def _maybe_create_topic(self, topic: str):
         if topic in self._created_topics:
@@ -51,13 +51,13 @@ class ChangeEventHandler:
         self._update_created_topics()
 
         if topic not in self._created_topics:
-            self._kafka_client.create_topic(topic)
+            self._producer.create_topic(topic)
             self._created_topics.add(topic)
 
     def handle(self, event: DecodedChangeEvent):
         topic = self._get_topic_from_event(event)
         self._maybe_create_topic(topic)
-        self._kafka_client.produce(
+        self._producer.produce(
             topic=topic,
             key=self._get_key_from_event(event),
             value=self._get_value_from_event(event),
@@ -71,7 +71,7 @@ class ChangeEventHandler:
         value: bytes,
         on_delivery: Callable
     ):
-        self._kafka_client.produce(
+        self._producer.produce(
             topic=topic,
             key=key,
             value=value,
