@@ -241,7 +241,7 @@ def test_stop_started(started_kafka_client):
 
     assert kafka_client._kafka_producer.called['list_topics'] == 1
     assert kafka_client._kafka_admin.called['list_topics'] == 1
-    assert kafka_client._kafka_producer.called['flush'] == 2
+    assert kafka_client._kafka_producer.called['flush'] == 1
 
     assert not kafka_client._should_run
     assert not kafka_client._poll_thread.is_alive()

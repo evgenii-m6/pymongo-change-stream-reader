@@ -56,11 +56,15 @@ class KafkaClient:
             self._poll_thread.start()
 
     def stop(self):
-        self._should_run = False
-        if self._poll_thread is not None:
-            self._poll_thread.join(self._poll_timeout*2)
-        if self._kafka_producer is not None:
-            self._kafka_producer.flush(self._stop_flush_timeout)
+        if self._should_run:
+            self._should_run = False
+            if self._poll_thread is not None and self._poll_thread.is_alive():
+                try:
+                    self._poll_thread.join(self._poll_timeout*2)
+                except RuntimeError:
+                    ...
+            if self._kafka_producer is not None:
+                self._kafka_producer.flush(self._stop_flush_timeout)
 
     def create_topics(self, new_topics: list[NewTopic]) -> dict[str, Future]:
         def create_new_topics():

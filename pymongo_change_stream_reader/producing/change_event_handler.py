@@ -44,6 +44,9 @@ class ChangeEventHandler:
     def stop(self):
         self._producer.stop()
 
+    def exit_gracefully(self):
+        self._producer.stop()
+
     def _maybe_create_topic(self, topic: str):
         if topic in self._created_topics:
             return

@@ -28,6 +28,7 @@ class ProducerFlow(BaseApplication):
 
     def exit_gracefully(self, signum, frame):
         self._should_run = False
+        self._event_handler.exit_gracefully()
 
     def _start_dependencies(self):
         self._event_handler.start()

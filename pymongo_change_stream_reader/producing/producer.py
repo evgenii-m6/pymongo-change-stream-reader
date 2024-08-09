@@ -24,15 +24,20 @@ class Producer:
         self._kafka_client = kafka_client
         self._logger = logger
         self._wait_for_flush = 5.0
+        self._should_run = False
 
     def start(self):
         self._logger.info("Connecting to kafka")
-        self._kafka_client.start()
+        if not self._should_run:
+            self._kafka_client.start()
+            self._should_run = True
         self._logger.info(f"Connected to kafka")
 
     def stop(self):
         self._logger.info("Disconnecting from kafka")
-        self._kafka_client.stop()
+        if self._should_run:
+            self._should_run = False
+            self._kafka_client.stop()
         self._logger.info(f"Disconnected from kafka")
 
     def create_topic(self, topic: str) -> None:
@@ -66,7 +71,7 @@ class Producer:
         on_delivery: Callable
     ) -> None:
         count = 0
-        while True:
+        while self._should_run:
             try:
                 if count > 0:
                     self._logger.info(
@@ -85,7 +90,7 @@ class Producer:
                 count += 1
 
                 wait_count = 0
-                while True:
+                while self._should_run:
                     self._logger.warning(
                         f"Producer's queue task_id={self._task_id} "
                         f"is overcrowded ({before_flush} messages in queue). "
