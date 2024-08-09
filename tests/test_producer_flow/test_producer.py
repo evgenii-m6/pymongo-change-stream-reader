@@ -23,6 +23,8 @@ class KafkaClient:
         self.produce_error = None
         self._flush_count = 0
         self._len = 10
+        self.start = Mock()
+        self.stop = Mock()
 
     def _create_topics(self, topics: list[NewTopic]) -> dict[str, Future]:
         result = {}
@@ -63,16 +65,41 @@ def kafka_client():
 
 
 @pytest.fixture()
-def producer(kafka_client):
-    return Producer(
+def producer_not_started(kafka_client):
+    producer = Producer(
         task_id=1,
         kafka_client=kafka_client,
         new_topic_configuration=NewTopicConfiguration(
-            new_topic_num_partitions = 2,
-            new_topic_replication_factor = 2,
+            new_topic_num_partitions=2,
+            new_topic_replication_factor=2,
             new_topic_config={"test": "test"}
         )
     )
+
+    try:
+        yield producer
+    finally:
+        producer.stop()
+
+
+@pytest.fixture()
+def producer(producer_not_started):
+    producer_not_started.start()
+    return producer_not_started
+
+
+def test_start_stop(producer_not_started, kafka_client):
+    kafka_client.start.assert_not_called()
+    producer_not_started.start()
+    kafka_client.start.assert_called_once()
+    producer_not_started.start()
+    kafka_client.start.assert_called_once()
+
+    kafka_client.stop.assert_not_called()
+    producer_not_started.stop()
+    kafka_client.stop.assert_called_once()
+    producer_not_started.stop()
+    kafka_client.stop.assert_called_once()
 
 
 def test_create_topic_ok(producer, kafka_client: KafkaClient):
