@@ -1,4 +1,6 @@
+import time
 from concurrent.futures import Future
+from threading import Thread
 from unittest.mock import Mock, call
 
 import pytest
@@ -55,6 +57,7 @@ class KafkaClient:
 class KafkaError:
     def __init__(self, code):
         self._code = code
+
     def code(self):
         return self._code
 
@@ -193,3 +196,37 @@ def test_produce_buffer_error(producer, kafka_client: KafkaClient):
         call(timeout=producer._wait_for_flush),
         call(timeout=producer._wait_for_flush),
     ]
+
+
+def test_stop_when_produce(producer, kafka_client: KafkaClient):
+    producer._wait_for_flush = 0.001
+    kafka_client.produce_error = BufferError()
+
+    def flush(timeout):
+        time.sleep(timeout)
+        nonlocal is_ready_to_stop
+        is_ready_to_stop = True
+        return len(kafka_client)
+
+    def stop():
+        while not is_ready_to_stop:
+            time.sleep(0.001)
+        producer.stop()
+
+    is_ready_to_stop = False
+    kafka_client.flush.side_effect = flush
+
+    t = Thread(target=stop, daemon=True)
+    t.start()
+    while not t.is_alive():
+        time.sleep(0.001)
+
+    kafka_client.stop.assert_not_called()
+    kafka_client.flush.assert_not_called()
+    kafka_client.produce.assert_not_called()
+
+    producer.produce(topic='test', key=b'1', value=b'2', on_delivery=on_delivery)
+    kafka_client.produce.assert_called_once()
+    kafka_client.stop.assert_called_once()
+    kafka_client.flush.assert_called()
+    assert not producer._should_run
