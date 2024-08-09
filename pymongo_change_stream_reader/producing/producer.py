@@ -24,7 +24,6 @@ class Producer:
         self._kafka_client = kafka_client
         self._logger = logger
         self._wait_for_flush = 5.0
-        self._max_wait_count = 2
 
     def start(self):
         self._logger.info("Connecting to kafka")
